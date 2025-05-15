@@ -11,13 +11,16 @@ function ChatWindow({ messages, currentTranscript }) {
 
   return (
     <div className="chat-container" ref={chatContainerRef}>
+      {/* Display all previous messages */}
       {messages.map((msg, index) => (
-        <div key={index} className={`message ${msg.sender}`}>
+        <div key={`msg-${index}`} className={`message ${msg.sender}`}>
           <div className="transcript">{msg.text}</div>
         </div>
       ))}
-      {currentTranscript && (
-        <div className="message assistant">
+      
+      {/* Display current transcript as a real-time typing indicator */}
+      {currentTranscript && currentTranscript.trim() !== '' && (
+        <div key="current-transcript" className="message assistant">
           <div className="transcript">{currentTranscript}</div>
         </div>
       )}

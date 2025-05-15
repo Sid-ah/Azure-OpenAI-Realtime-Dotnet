@@ -30,11 +30,16 @@ function App() {
   };
 
   const addMessage = (sender, text = '') => {
-    setMessages(prevMessages => [...prevMessages, { sender, text }]);
+    // Only add messages with actual content
+    if (text && text.trim()) {
+      addLog(`Adding ${sender} message to history`);
+      setMessages(prevMessages => [...prevMessages, { sender, text }]);
+    }
   };
 
   const updateAssistantMessage = (delta) => {
-    setCurrentTranscript(prev => prev + delta);
+  // Append incoming delta to current transcript
+  setCurrentTranscript(prev => prev + delta);
   };
 
   return (
@@ -61,6 +66,8 @@ function App() {
         addMessage={addMessage}
         updateAssistantMessage={updateAssistantMessage}
         setCurrentTranscript={setCurrentTranscript}
+        currentTranscript={currentTranscript}
+        status={status}
       />
 
       <Logs logs={logs} />

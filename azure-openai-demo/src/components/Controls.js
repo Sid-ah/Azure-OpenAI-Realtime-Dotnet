@@ -24,6 +24,28 @@ function Controls({
   const sessionIdRef = useRef(null);
   const ephKeyRef = useRef(null);
 
+  // For audio processing
+  const audioContextRef = useRef(null);
+  const audioBufferRef = useRef(null);
+  
+  // Initialize audio context safely
+  useEffect(() => {
+    // Lazy initialize AudioContext only when needed
+    if (!audioContextRef.current && typeof window !== 'undefined') {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (AudioContext) {
+        audioContextRef.current = new AudioContext({ sampleRate: 24000 });
+      }
+    }
+    
+    return () => {
+      // Cleanup when component unmounts
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+    };
+  }, []);
+
   const startConversation = async () => {
     try {
       updateStatus('Initializing…');
@@ -105,14 +127,23 @@ function Controls({
   };
 
   const setupAudio = async () => {
-    audioStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // Get audio with specific constraints for 24kHz compatibility with Azure
+    audioStreamRef.current = await navigator.mediaDevices.getUserMedia({ 
+      audio: {
+        channelCount: 1,       // Mono
+        sampleRate: 24000,     // 24kHz as required by Azure
+        echoCancellation: true,
+        noiseSuppression: true,
+      } 
+    });
 
     // add track to peer connection early (before negotiating)
     audioStreamRef.current.getAudioTracks().forEach(track => 
       peerConnectionRef.current.addTrack(track, audioStreamRef.current)
     );
 
-    // recorder → webm/opus chunks (lower latency than PCM but works fine with Whisper)
+    // We'll still use webm/opus for recording as it's more efficient
+    // but we'll convert to PCM before sending to Azure
     mediaRecorderRef.current = new MediaRecorder(audioStreamRef.current, { 
       mimeType: 'audio/webm;codecs=opus', 
       audioBitsPerSecond: 64000 
@@ -125,20 +156,96 @@ function Controls({
     mediaRecorderRef.current.start(100); // 100 ms chunks
     updateStatus('Recording');
 
-    mediaRecorderRef.current.ondataavailable = (evt) => {
-      if (evt.data.size === 0) return;
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = reader.result.split(',')[1];
-        if (dataChannelRef.current?.readyState === 'open') {
-          dataChannelRef.current.send(JSON.stringify({
-            type: 'input_audio_buffer.append',
-            audio: base64
-          }));
-        }
-      };
-      reader.readAsDataURL(evt.data);
+    // Create an audio processor worklet for more reliable audio processing
+    let audioProcessor = null;
+    
+    const setupAudioProcessor = async () => {
+      if (!audioContextRef.current) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioContextRef.current = new AudioContext({ sampleRate: 24000 });
+      }
+      
+      try {
+        // Create a direct input source from the audio stream
+        const source = audioContextRef.current.createMediaStreamSource(audioStreamRef.current);
+        
+        // Create an analyzer to get PCM data directly
+        const analyzer = audioContextRef.current.createAnalyser();
+        analyzer.fftSize = 2048;
+        source.connect(analyzer);
+        
+        // Get PCM data directly from the analyzer
+        const pcmProcessor = () => {
+          const dataArray = new Float32Array(analyzer.fftSize);
+          analyzer.getFloatTimeDomainData(dataArray);
+          
+          // Convert to 16-bit PCM
+          const pcmData = new Int16Array(dataArray.length);
+          
+          // Convert Float32 to Int16
+          for (let i = 0; i < dataArray.length; i++) {
+            const s = Math.max(-1, Math.min(1, dataArray[i]));
+            pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          }
+          
+          // Convert to base64
+          const base64 = arrayBufferToBase64(pcmData.buffer);
+          
+          // Send to server if connection is open
+          if (dataChannelRef.current?.readyState === 'open' && isRecording) {
+            dataChannelRef.current.send(JSON.stringify({
+              type: 'input_audio_buffer.append',
+              audio: base64
+            }));
+          }
+        };
+        
+        // Process audio at regular intervals
+        audioProcessor = setInterval(pcmProcessor, 100);
+        return audioProcessor;
+      } catch (error) {
+        addLog(`❌ Audio processor setup error: ${error.message}`);
+        return null;
+      }
     };
+    
+    // Set up the audio processor
+    setupAudioProcessor().then(processor => {
+      audioBufferRef.current = processor;
+    });
+    
+    // For compatibility, still handle the MediaRecorder data
+    mediaRecorderRef.current.ondataavailable = async (evt) => {
+      if (evt.data.size === 0) return;
+      // We're not using this data anymore as we're processing audio directly
+      // But we'll keep the event handler for debugging purposes
+      addLog(`Audio chunk size: ${evt.data.size}`);
+    };
+  };
+  
+  // Helper function to convert AudioBuffer to 16-bit PCM
+  const convertToPCM16 = (audioBuffer) => {
+    const channelData = audioBuffer.getChannelData(0); // Mono - get the first channel
+    const pcmData = new Int16Array(channelData.length);
+    
+    // Convert Float32 to Int16
+    for (let i = 0; i < channelData.length; i++) {
+      // Convert float (-1.0 to 1.0) to int16 (-32768 to 32767)
+      const s = Math.max(-1, Math.min(1, channelData[i]));
+      pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    }
+    
+    return pcmData;
+  };
+  
+  // Helper function to convert ArrayBuffer to base64
+  const arrayBufferToBase64 = (buffer) => {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
   };
 
   const stopRecording = () => {
@@ -146,6 +253,13 @@ function Controls({
     setIsRecording(false);
     mediaRecorderRef.current.stop();
     updateStatus('Stopped recording');
+    
+    // Clear the audio processor interval
+    if (audioBufferRef.current) {
+      clearInterval(audioBufferRef.current);
+      audioBufferRef.current = null;
+    }
+    
     if (dataChannelRef.current?.readyState === 'open') {
       dataChannelRef.current.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
     }
@@ -200,15 +314,18 @@ function Controls({
         break;
 
       case 'conversation.item.input_audio_transcription.completed':
+        // Add user message from speech transcription
         addMessage('user', msg.transcript ?? '');
         break;
 
       case 'response.created':
+        // Reset transcript when a response starts
         setCurrentTranscript('');
         break;
 
       case 'response.text_delta':
       case 'response.delta': // newer schema
+        // Accumulate delta updates to the current transcript
         if (msg.delta?.text) {
           updateAssistantMessage(msg.delta.text);
         } else if (msg.delta?.content) {
@@ -216,9 +333,20 @@ function Controls({
         }
         break;
 
-      case 'response.done':
+      case 'response.output_item.done':
+        if (msg.item?.content[0]?.transcript) {
+          // Each completed item is a full assistant response bubble
+          const transcript = msg.item.content[0].transcript;
+          addLog(`Assistant response received: ${transcript.substring(0, 20)}...`);
+          addMessage('assistant', transcript);
+          // Clear current transcript placeholder after adding to history
+          setCurrentTranscript('');
+        }
+        break;
+
       case 'response.completed':
-        addMessage('assistant', currentTranscript);
+        // Response fully completed; nothing to accumulate as bubbles already added
+        // Ensure placeholder is cleared
         setCurrentTranscript('');
         break;
 
