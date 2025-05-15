@@ -1,0 +1,27 @@
+@realtime_api_dotnet_HostAddress = http://localhost:5126
+
+// Create a session with Azure OpenAI Realtime API
+POST {{realtime_api_dotnet_HostAddress}}/api/AzureOpenAI/sessions
+Content-Type: application/json
+
+{
+    "voice": "alloy"
+}
+
+###
+
+// After getting a response from the above request, copy the ephemeralKey value below
+@ephemeralKey = <your-ephemeral-key>
+
+// Connect RTC using the ephemeral key from the session
+POST {{realtime_api_dotnet_HostAddress}}/api/AzureOpenAI/rtc
+Content-Type: application/json
+
+{
+    "sdp": "v=0\no=- 12345 12345 IN IP4 127.0.0.1\ns=-\nt=0 0\na=group:BUNDLE audio\nm=audio 9 UDP/TLS/RTP/SAVPF 111\nc=IN IP4 0.0.0.0\na=rtcp:9 IN IP4 0.0.0.0\na=ice-ufrag:someufrag\na=ice-pwd:someicepwd\na=fingerprint:sha-256 00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF\na=setup:actpass\na=mid:audio\na=extmap:1 urn:ietf:params:rtp-hdrext:ssrc-audio-level\na=sendrecv\na=rtcp-mux\na=rtpmap:111 opus/48000/2\na=fmtp:111 minptime=10;useinbandfec=1\n",
+    "ephemeralKey": "{{ephemeralKey}}",
+    "deploymentName": "gpt-4o-realtime-preview", 
+    "region": "EastUS2"
+}
+
+###
