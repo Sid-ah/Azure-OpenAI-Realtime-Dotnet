@@ -21,6 +21,14 @@ h1 {
   margin-top: 0;
 }
 
+h3 {
+  color: #0078d4;
+  margin-top: 20px;
+  margin-bottom: 10px;
+  padding-top: 15px;
+  border-top: 1px solid #eee;
+}
+
 .controls {
   margin: 20px 0;
   display: flex;
@@ -107,6 +115,11 @@ input, select {
   width: 250px;
 }
 
+input[type="checkbox"] {
+  width: auto;
+  margin-right: 5px;
+}
+
 label {
   display: block;
   margin-bottom: 5px;
@@ -151,4 +164,18 @@ label {
   height: 150px;
   overflow-y: auto;
   margin-top: 20px;
+}
+
+.rag-section {
+  background-color: #f5f9ff;
+  padding: 15px;
+  border-radius: 6px;
+  border-left: 4px solid #0078d4;
+  margin-top: 10px;
+  margin-bottom: 20px;
+}
+
+.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }

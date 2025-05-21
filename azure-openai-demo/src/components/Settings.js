@@ -91,45 +91,53 @@ function Settings({ settings, setSettings, addLog }) {
       </div>
       
       <h3>RAG Settings</h3>
-      <div className="form-group">
-        <label htmlFor="ragEnabled">Enable RAG:</label>
-        <input 
-          type="checkbox" 
-          id="ragEnabled" 
-          checked={ragEnabled}
-          onChange={(e) => setRagEnabled(e.target.checked)}
-        />
-      </div>
-      <div className="form-group">
-        <label htmlFor="ragQuery">Context Query:</label>
-        <input 
-          type="text" 
-          id="ragQuery" 
-          placeholder="Enter search query for documents" 
-          value={ragQuery}
-          onChange={(e) => setRagQuery(e.target.value)}
-          disabled={!ragEnabled}
-        />
-      </div>
-      <div className="form-group">
-        <label htmlFor="ragTopK">Number of Documents:</label>
-        <select 
-          id="ragTopK" 
-          value={ragTopK} 
-          onChange={(e) => setRagTopK(parseInt(e.target.value))}
-          disabled={!ragEnabled}
-        >
-          <option value="1">1</option>
-          <option value="2">2</option>
-          <option value="3">3</option>
-          <option value="5">5</option>
-          <option value="10">10</option>
-        </select>
+      <div className="rag-section">
+        <div className="form-group">
+          <label htmlFor="ragEnabled">
+            <input 
+              type="checkbox" 
+              id="ragEnabled" 
+              checked={ragEnabled}
+              onChange={(e) => setRagEnabled(e.target.checked)}
+            />
+            Enable Retrieval-Augmented Generation
+          </label>
+        </div>
+        <div className="form-group">
+          <label htmlFor="ragQuery">Context Query:</label>
+          <input 
+            type="text" 
+            id="ragQuery" 
+            placeholder="Enter search query for documents" 
+            value={ragQuery}
+            onChange={(e) => setRagQuery(e.target.value)}
+            disabled={!ragEnabled}
+            className={!ragEnabled ? 'disabled' : ''}
+          />
+        </div>
+        <div className="form-group">
+          <label htmlFor="ragTopK">Number of Documents:</label>
+          <select 
+            id="ragTopK" 
+            value={ragTopK} 
+            onChange={(e) => setRagTopK(parseInt(e.target.value))}
+            disabled={!ragEnabled}
+            className={!ragEnabled ? 'disabled' : ''}
+          >
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="5">5</option>
+            <option value="10">10</option>
+          </select>
+        </div>
       </div>
       
       <button id="saveSettings" onClick={saveSettings}>Save Settings</button>
     </div>
   );
 }
+
+export default Settings;
 
 export default Settings;
