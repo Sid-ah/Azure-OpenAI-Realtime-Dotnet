@@ -1,9 +1,12 @@
 // Controllers/AzureOpenAIController.cs
 using Microsoft.AspNetCore.Mvc;
+using System;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using AzureOpenAIDemo.Api.Models;
+using AzureOpenAIDemo.Api.Services;
 
 namespace AzureOpenAIDemo.Api.Controllers
 {
@@ -14,12 +17,38 @@ namespace AzureOpenAIDemo.Api.Controllers
         private readonly IConfiguration _configuration;
         private readonly HttpClient _httpClient;
         private readonly ILogger<AzureOpenAIController> _logger;
+        private readonly ICognitiveSearchService _cognitiveSearchService;
 
-        public AzureOpenAIController(IConfiguration configuration, HttpClient httpClient, ILogger<AzureOpenAIController> logger)
+        public AzureOpenAIController(
+            IConfiguration configuration, 
+            HttpClient httpClient, 
+            ILogger<AzureOpenAIController> logger,
+            ICognitiveSearchService cognitiveSearchService = null)
         {
             _configuration = configuration;
             _httpClient = httpClient;
             _logger = logger;
+            _cognitiveSearchService = cognitiveSearchService;
+
+        [HttpGet("ragcontext")]
+        public async Task<IActionResult> GetRagContext([FromQuery] string query, [FromQuery] int topK = 3)
+        {
+            if (_cognitiveSearchService == null)
+            {
+                return NotFound("Cognitive Search service not configured");
+            }
+
+            try
+            {
+                string ragContext = await _cognitiveSearchService.GenerateRAGContextAsync(query, topK);
+                return Content(ragContext);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating RAG context");
+                return StatusCode(500, $"Error generating RAG context: {ex.Message}");
+            }
+        }
         }
 
         [HttpPost("sessions")]
@@ -50,10 +79,50 @@ namespace AzureOpenAIDemo.Api.Controllers
                 var error = await response.Content.ReadAsStringAsync();
                 _logger.LogError($"Failed to create session: {response.StatusCode}, {error}");
                 return StatusCode((int)response.StatusCode, error);
+
+        [HttpGet("ragcontext")]
+        public async Task<IActionResult> GetRagContext([FromQuery] string query, [FromQuery] int topK = 3)
+        {
+            if (_cognitiveSearchService == null)
+            {
+                return NotFound("Cognitive Search service not configured");
+            }
+
+            try
+            {
+                string ragContext = await _cognitiveSearchService.GenerateRAGContextAsync(query, topK);
+                return Content(ragContext);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating RAG context");
+                return StatusCode(500, $"Error generating RAG context: {ex.Message}");
+            }
+        }
             }
 
             var sessionResponse = await response.Content.ReadAsStringAsync();
             return Ok(sessionResponse);
+
+        [HttpGet("ragcontext")]
+        public async Task<IActionResult> GetRagContext([FromQuery] string query, [FromQuery] int topK = 3)
+        {
+            if (_cognitiveSearchService == null)
+            {
+                return NotFound("Cognitive Search service not configured");
+            }
+
+            try
+            {
+                string ragContext = await _cognitiveSearchService.GenerateRAGContextAsync(query, topK);
+                return Content(ragContext);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating RAG context");
+                return StatusCode(500, $"Error generating RAG context: {ex.Message}");
+            }
+        }
         }
 
         [HttpPost("rtc")]
@@ -75,10 +144,70 @@ namespace AzureOpenAIDemo.Api.Controllers
                 var error = await response.Content.ReadAsStringAsync();
                 _logger.LogError($"RTC connect failed: {response.StatusCode}, {error}");
                 return StatusCode((int)response.StatusCode, error);
+
+        [HttpGet("ragcontext")]
+        public async Task<IActionResult> GetRagContext([FromQuery] string query, [FromQuery] int topK = 3)
+        {
+            if (_cognitiveSearchService == null)
+            {
+                return NotFound("Cognitive Search service not configured");
+            }
+
+            try
+            {
+                string ragContext = await _cognitiveSearchService.GenerateRAGContextAsync(query, topK);
+                return Content(ragContext);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating RAG context");
+                return StatusCode(500, $"Error generating RAG context: {ex.Message}");
+            }
+        }
             }
 
             var answerSdp = await response.Content.ReadAsStringAsync();
             return Content(answerSdp, "application/sdp");
+
+        [HttpGet("ragcontext")]
+        public async Task<IActionResult> GetRagContext([FromQuery] string query, [FromQuery] int topK = 3)
+        {
+            if (_cognitiveSearchService == null)
+            {
+                return NotFound("Cognitive Search service not configured");
+            }
+
+            try
+            {
+                string ragContext = await _cognitiveSearchService.GenerateRAGContextAsync(query, topK);
+                return Content(ragContext);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating RAG context");
+                return StatusCode(500, $"Error generating RAG context: {ex.Message}");
+            }
+        }
+        }
+
+        [HttpGet("ragcontext")]
+        public async Task<IActionResult> GetRagContext([FromQuery] string query, [FromQuery] int topK = 3)
+        {
+            if (_cognitiveSearchService == null)
+            {
+                return NotFound("Cognitive Search service not configured");
+            }
+
+            try
+            {
+                string ragContext = await _cognitiveSearchService.GenerateRAGContextAsync(query, topK);
+                return Content(ragContext);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating RAG context");
+                return StatusCode(500, $"Error generating RAG context: {ex.Message}");
+            }
         }
     }
 }

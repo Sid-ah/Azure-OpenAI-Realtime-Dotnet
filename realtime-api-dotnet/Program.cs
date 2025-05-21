@@ -1,9 +1,12 @@
 using System.Security.Authentication;
+using AzureOpenAIDemo.Api.Services;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
 builder.Services.AddControllers();
 builder.Services.AddHttpClient();
+builder.Services.AddSingleton<ICognitiveSearchService, CognitiveSearchService>();
 builder.WebHost.ConfigureKestrel(options =>
 {
     options.ConfigureHttpsDefaults(httpsOptions =>

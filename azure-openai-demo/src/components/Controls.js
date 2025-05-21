@@ -118,7 +118,13 @@ function Controls({
       peerConnectionRef.current.localDescription.sdp,
       ephKeyRef.current,
       settings.deploymentName,
-      settings.region
+      settings.region,
+      settings.ragEnabled ? {
+        Enabled: settings.ragEnabled,
+        SearchQuery: settings.ragQuery || "",
+        TopK: settings.ragTopK || 3,
+        RelevanceThreshold: 0.7
+      } : null
     );
 
     await peerConnectionRef.current.setRemoteDescription({ type: 'answer', sdp: answerSdp });
@@ -283,10 +289,19 @@ function Controls({
     addLog('DataChannel open – sending session.update');
     updateStatus('Connected');
 
+    // Base configuration for session update
+    const baseInstructions = 'You are a helpful AI assistant. Respond courteously and concisely.';
+    
+    // Enhanced instructions if RAG is enabled
+    let instructions = baseInstructions;
+    if (settings.ragEnabled && settings.ragQuery) {
+      instructions = `${baseInstructions} Use the context information from relevant documents when available to provide accurate answers.`;
+    }
+    
     const cfg = {
       type: 'session.update',
       session: {
-        instructions: 'You are a helpful AI assistant. Respond courteously and concisely.',
+        instructions: instructions,
         modalities: ['audio', 'text'],
         input_audio_transcription: {
           model: 'whisper-1'

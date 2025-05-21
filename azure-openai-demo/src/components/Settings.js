@@ -5,6 +5,9 @@ function Settings({ settings, setSettings, addLog }) {
   const [region, setRegion] = useState(settings.region);
   const [deploymentName, setDeploymentName] = useState(settings.deploymentName);
   const [apiVersion, setApiVersion] = useState(settings.apiVersion);
+  const [ragEnabled, setRagEnabled] = useState(settings.ragEnabled || false);
+  const [ragQuery, setRagQuery] = useState(settings.ragQuery || '');
+  const [ragTopK, setRagTopK] = useState(settings.ragTopK || 3);
 
   const saveSettings = () => {
     const newSettings = {
@@ -12,7 +15,10 @@ function Settings({ settings, setSettings, addLog }) {
       voice,
       region,
       deploymentName,
-      apiVersion
+      apiVersion,
+      ragEnabled,
+      ragQuery,
+      ragTopK
     };
     setSettings(newSettings);
     localStorage.setItem('azureOpenAISettings', JSON.stringify(newSettings));
@@ -25,6 +31,9 @@ function Settings({ settings, setSettings, addLog }) {
     if (savedSettings.region) setRegion(savedSettings.region);
     if (savedSettings.deploymentName) setDeploymentName(savedSettings.deploymentName);
     if (savedSettings.apiVersion) setApiVersion(savedSettings.apiVersion);
+    if (savedSettings.ragEnabled !== undefined) setRagEnabled(savedSettings.ragEnabled);
+    if (savedSettings.ragQuery) setRagQuery(savedSettings.ragQuery);
+    if (savedSettings.ragTopK) setRagTopK(savedSettings.ragTopK);
     
     if (Object.keys(savedSettings).length > 0) {
       setSettings(prevSettings => ({
@@ -80,9 +89,55 @@ function Settings({ settings, setSettings, addLog }) {
           <option value="swedencentral">Sweden Central</option>
         </select>
       </div>
+      
+      <h3>RAG Settings</h3>
+      <div className="rag-section">
+        <div className="form-group">
+          <label htmlFor="ragEnabled">
+            <input 
+              type="checkbox" 
+              id="ragEnabled" 
+              checked={ragEnabled}
+              onChange={(e) => setRagEnabled(e.target.checked)}
+            />
+            Enable Retrieval-Augmented Generation
+          </label>
+        </div>
+        <div className="form-group">
+          <label htmlFor="ragQuery">Context Query:</label>
+          <input 
+            type="text" 
+            id="ragQuery" 
+            placeholder="Enter search query for documents" 
+            value={ragQuery}
+            onChange={(e) => setRagQuery(e.target.value)}
+            disabled={!ragEnabled}
+            className={!ragEnabled ? 'disabled' : ''}
+          />
+        </div>
+        <div className="form-group">
+          <label htmlFor="ragTopK">Number of Documents:</label>
+          <select 
+            id="ragTopK" 
+            value={ragTopK} 
+            onChange={(e) => setRagTopK(parseInt(e.target.value))}
+            disabled={!ragEnabled}
+            className={!ragEnabled ? 'disabled' : ''}
+          >
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="5">5</option>
+            <option value="10">10</option>
+          </select>
+        </div>
+      </div>
+      
       <button id="saveSettings" onClick={saveSettings}>Save Settings</button>
     </div>
   );
 }
+
+export default Settings;
 
 export default Settings;

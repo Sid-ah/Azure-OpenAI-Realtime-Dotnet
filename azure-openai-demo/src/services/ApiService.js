@@ -23,7 +23,7 @@ export const createSession = async (voice) => {
   }
 };
 
-export const connectRTC = async (sdp, ephemeralKey, deploymentName, region) => {
+export const connectRTC = async (sdp, ephemeralKey, deploymentName, region, ragOptions = null) => {
   try {
     const response = await fetch(`${API_BASE_URL}/rtc`, {
       method: 'POST',
@@ -34,7 +34,8 @@ export const connectRTC = async (sdp, ephemeralKey, deploymentName, region) => {
         sdp, 
         ephemeralKey,
         deploymentName,
-        region
+        region,
+        ragOptions
       })
     });
 
@@ -46,6 +47,28 @@ export const connectRTC = async (sdp, ephemeralKey, deploymentName, region) => {
     return await response.text();
   } catch (error) {
     console.error('Error connecting RTC:', error);
+    throw error;
+  }
+};
+
+export const uploadDocument = async (title, content) => {
+  try {
+    const response = await fetch(`${API_BASE_URL.replace('AzureOpenAI', 'Documents')}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ title, content })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to upload document - ${response.status}: ${errorText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error uploading document:', error);
     throw error;
   }
 };

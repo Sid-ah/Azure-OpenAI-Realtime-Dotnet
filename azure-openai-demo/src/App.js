@@ -14,7 +14,10 @@ function App() {
     voice: 'verse',
     region: 'eastus2',
     deploymentName: 'gpt-4o-mini-realtime-preview',
-    apiVersion: '2025-04-01-preview'
+    apiVersion: '2025-04-01-preview',
+    ragEnabled: false,
+    ragQuery: '',
+    ragTopK: 3
   });
   const [messages, setMessages] = useState([]);
   const [currentTranscript, setCurrentTranscript] = useState('');
