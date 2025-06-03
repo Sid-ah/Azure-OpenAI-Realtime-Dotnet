@@ -31,8 +31,8 @@ namespace AzureOpenAIDemo.Api.Controllers
         //private readonly StatsLoader _statsLoader;
         private readonly DatabaseService _databaseService;
         private readonly AzureOpenAiService _azureOpenAiService;
-        private readonly Kernel _kernel;
-        private readonly string _dbSchema;
+        //private readonly Kernel _kernel;
+        //private readonly string _dbSchema;
         private string _databaseConnectionString;
         private string _databaseDescription;
         private string _tables;

@@ -79,5 +79,4 @@ yarn-error.log
 .LSOverride
 /realtime-api-dotnet/../DatabaseImporter/appsettings.Local.json
 /realtime-api-dotnet/../DatabaseImporter/appsettings.Local.json
-/realtime-api-dotnet/appsettings.Local.json
 /realtime-api-dotnet/../DatabaseImporter/appsettings.Local.json
