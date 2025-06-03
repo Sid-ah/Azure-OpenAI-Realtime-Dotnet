@@ -1,9 +1,14 @@
+using realtime_api_dotnet.Services;
+//using realtime_api_dotnet.Utilities;
 using System.Security.Authentication;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
 builder.Services.AddControllers();
 builder.Services.AddHttpClient();
+//builder.Services.AddSingleton<StatsLoader>();
+builder.Services.AddSingleton<DatabaseService>();
+builder.Services.AddSingleton<AzureOpenAiService>();
 builder.WebHost.ConfigureKestrel(options =>
 {
     options.ConfigureHttpsDefaults(httpsOptions =>
@@ -15,7 +20,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp", builder =>
     {
-        builder.WithOrigins("http://localhost:3000")
+        builder.WithOrigins("*")
                .AllowAnyMethod()
                .AllowAnyHeader();
     });

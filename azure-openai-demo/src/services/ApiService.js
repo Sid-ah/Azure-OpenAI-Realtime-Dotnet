@@ -1,5 +1,5 @@
 // src/services/ApiService.js
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5126/api/AzureOpenAI';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://localhost:7254/api/AzureOpenAI';
 
 export const createSession = async (voice) => {
   try {
