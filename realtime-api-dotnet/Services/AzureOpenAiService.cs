@@ -6,6 +6,7 @@
     using AzureOpenAIDemo.Api.Controllers;
     using Azure.Core;
     using SqlDbSchemaExtractor.Schema;
+    using AzureOpenAIDemo.Api.Prompts;
 
     public class AzureOpenAiService
     {
@@ -46,13 +47,7 @@
         {
             // TODO: We are currently not rewriting the query, but it may be possible a follow up query which is about statitistics may be inteprepted as conversational
             // without taking into account the chat history context, so this may be needed
-            string intentDetectionPrompt = $@"You are an AI assistant that determines if a user's question requires NBA basketball statistics or is just a conversational message.
-                                                The user's question may be a short follow up question so you must uset he context of the chat history to determine if the user's question
-                                                is related to statistics.
-                                                You must only respond with 'STATISTICAL' or 'CONVERSATIONAL'
-
-                                                Chat History: {conversationHistory}
-                                                ";
+            string intentDetectionPrompt = CorePrompts.GetIntentClassificationPrompt(conversationHistory);
 
             ChatCompletion completion = await _chatClient.CompleteChatAsync(
                 [
@@ -84,14 +79,7 @@
             // if the user asks "Who had the most steals on the season?" and the LLM answers "Marcus Smart". The
             // follow up may be "How many steals did he have?". Rather than generate a query for "How many steals did he have?",
             // we'll use the LLM to rewrite this query using history so it will be something like "How many steals did Marcus Smart have on the season?"
-            string queryRewritePrompt = $@"You are a query enhancer that rewrites the latest user question to based on contextual information from
-                                                previous exchanges in the chat history, if necessary. If the question seems to be a follow-up question, write it so the full context is
-                                                preserved. If the question is already explicit, return it unchanged. Only return the rewritten
-                                                question text without explanations.
-
-                                                Chat History: {conversationHistory}
-                                            ";
-
+            string queryRewritePrompt = CorePrompts.GetQueryRewritePrompt(conversationHistory);
 
             ChatCompletion completion = await _chatClient.CompleteChatAsync(
                 [
@@ -121,32 +109,7 @@
             var tableNames = tables.Split("|");
             var jsonSchema = await sqlHarness.ReverseEngineerSchemaJSONAsync(tableNames);
 
-            string sqlPrompt = $@"You are responsible for generating a SQL query in response to user input. Only target the tables described in the given database schema.
-
-                                    Perform each of the following steps:
-                                    1. Generate a query that is always entirely based on the targeted database schema.
-                                    2. Return ONLY the SQL query, nothing more.
-
-                                    IMPORTANT:
-                                        - Return only a valid SQL query.
-                                          - Do not include any backticks, newlines, backslashes, escape sequences, or any other formatting.
-                                          - The entire SQL query must appear on a single line, with no whitespace except single spaces after colons and commas.
-                                          - Return only the SQL query and nothing else.
-
-                                    The database schema is described according to the following json schema:
-                                    {jsonSchema}";
-
-            // if we are fixing a failed query, add the error context so the LLM can try to regenerate a proper
-            if (!string.IsNullOrEmpty(previousGeneratedSqlQuery) && !string.IsNullOrEmpty(sqlErrorMessage))
-            {
-                sqlPrompt += $@"
-                                IMPORTANT - FIX FAILED QUERY:
-                                The following SQL query failed with this error: {sqlErrorMessage}
-
-                                Failed SQL query: {previousGeneratedSqlQuery}
-
-                                Please fix this SQL query to address this specific error. Make sure your fixed query follows all of the formatting instructions above.";
-            }
+            string sqlPrompt = CorePrompts.GetSqlGenerationPrompt(jsonSchema, previousGeneratedSqlQuery, sqlErrorMessage);
 
             ChatCompletion completion = await _chatClient.CompleteChatAsync(
                 [

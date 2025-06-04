@@ -28,21 +28,18 @@ namespace AzureOpenAIDemo.Api.Controllers
         private readonly IConfiguration _configuration;
         private readonly HttpClient _httpClient;
         private readonly ILogger<AzureOpenAIController> _logger;
-        //private readonly StatsLoader _statsLoader;
         private readonly DatabaseService _databaseService;
         private readonly AzureOpenAiService _azureOpenAiService;
         //private readonly Kernel _kernel;
-        //private readonly string _dbSchema;
         private string _databaseConnectionString;
         private string _databaseDescription;
         private string _tables;
 
-        public AzureOpenAIController(IConfiguration configuration, HttpClient httpClient, ILogger<AzureOpenAIController> logger, /*StatsLoader statsLoader, */DatabaseService databaseService, AzureOpenAiService azureOpenAiService)
+        public AzureOpenAIController(IConfiguration configuration, HttpClient httpClient, ILogger<AzureOpenAIController> logger, DatabaseService databaseService, AzureOpenAiService azureOpenAiService)
         {
             _configuration = configuration;
             _httpClient = httpClient;
             _logger = logger;
-            //_statsLoader = statsLoader;
             _databaseService = databaseService;
             _azureOpenAiService = azureOpenAiService;
 
@@ -71,12 +68,6 @@ namespace AzureOpenAIDemo.Api.Controllers
 
             var sessionsUrl = $"https://{resourceName}.openai.azure.com/openai/realtimeapi/sessions?api-version={apiVersion}";
 
-            // load the stats data so we can provide this as context for the agent to answer questions around this data only
-            //await _statsLoader.LoadDataAsync();
-            //string statsData = _statsLoader.FormatDataForLLMContext();
-
-            //string systemPrompt = $"{request.SystemPrompt}\n\nHere is the player statistics data from the 2023-24 regular season that you can ues to answer questions:\n{statsData}";
-            
             var body = new
             {
                 model = realtimeDeploymentName,
