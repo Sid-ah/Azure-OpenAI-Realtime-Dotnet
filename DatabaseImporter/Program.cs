@@ -29,7 +29,6 @@ namespace DataImporter
                     .Build();
 
                 string connectionString = config.GetConnectionString("SqlServer");
-                ;
 
                 if (string.IsNullOrEmpty(connectionString))
                 {

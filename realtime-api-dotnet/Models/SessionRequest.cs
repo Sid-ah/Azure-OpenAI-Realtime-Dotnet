@@ -1,4 +1,4 @@
-using AzureOpenAIDemo.Api.Prompts;
+using realtime_api_dotnet.Prompts;
 
 public class SessionRequest
 {

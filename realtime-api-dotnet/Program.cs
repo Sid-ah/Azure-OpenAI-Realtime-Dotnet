@@ -4,9 +4,16 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
 builder.Services.AddControllers();
+
+// Load configuration from appsettings.json and appsettings.local.json
+builder.Configuration
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+    .AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<DatabaseService>();
 builder.Services.AddSingleton<AzureOpenAiService>();
+
 builder.WebHost.ConfigureKestrel(options =>
 {
     options.ConfigureHttpsDefaults(httpsOptions =>
@@ -14,6 +21,7 @@ builder.WebHost.ConfigureKestrel(options =>
         httpsOptions.SslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13;
     });
 });
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp", builder =>
