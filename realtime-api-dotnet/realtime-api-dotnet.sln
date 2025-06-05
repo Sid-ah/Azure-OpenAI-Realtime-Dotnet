@@ -6,8 +6,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "realtime-api-dotnet", "real
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DatabaseImporter", "..\DatabaseImporter\DatabaseImporter.csproj", "{8DFDBB97-CDC7-4755-8AE3-D07C5F8C87D9}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SQLServerSchemaExtractor", "..\..\SQLServerSchemaExtractor\SQLServerSchemaExtractor.csproj", "{DCC0C45F-D1A1-4E3C-8C4C-07D32DBA6BE1}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -22,10 +20,6 @@ Global
 		{8DFDBB97-CDC7-4755-8AE3-D07C5F8C87D9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8DFDBB97-CDC7-4755-8AE3-D07C5F8C87D9}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8DFDBB97-CDC7-4755-8AE3-D07C5F8C87D9}.Release|Any CPU.Build.0 = Release|Any CPU
-		{DCC0C45F-D1A1-4E3C-8C4C-07D32DBA6BE1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{DCC0C45F-D1A1-4E3C-8C4C-07D32DBA6BE1}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{DCC0C45F-D1A1-4E3C-8C4C-07D32DBA6BE1}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{DCC0C45F-D1A1-4E3C-8C4C-07D32DBA6BE1}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

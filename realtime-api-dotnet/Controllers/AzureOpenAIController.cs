@@ -8,12 +8,10 @@ using Azure.AI.OpenAI;
 using System.Text;
 using System.Text.Json;
 using System.Collections.Generic;
-//using realtime_api_dotnet.Utilities;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.VisualBasic;
 using OpenAI.Chat;
 using Microsoft.SemanticKernel;
-using SqlDbSchemaExtractor.Schema;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
 using realtime_api_dotnet.Services;
@@ -31,9 +29,6 @@ namespace AzureOpenAIDemo.Api.Controllers
         private readonly DatabaseService _databaseService;
         private readonly AzureOpenAiService _azureOpenAiService;
         //private readonly Kernel _kernel;
-        private string _databaseConnectionString;
-        private string _databaseDescription;
-        private string _tables;
 
         public AzureOpenAIController(IConfiguration configuration, HttpClient httpClient, ILogger<AzureOpenAIController> logger, DatabaseService databaseService, AzureOpenAiService azureOpenAiService)
         {
@@ -41,12 +36,7 @@ namespace AzureOpenAIDemo.Api.Controllers
             _httpClient = httpClient;
             _logger = logger;
             _databaseService = databaseService;
-            _azureOpenAiService = azureOpenAiService;
-
-            // database connection details
-            _databaseConnectionString = _configuration["DatabaseConnection"];
-            _databaseDescription = _configuration["DatabaseDescription"];
-            _tables = _configuration["tables"];
+            _azureOpenAiService = azureOpenAiService;            
 
             /*            
             // Initialize Semantic Kernel
@@ -190,7 +180,7 @@ namespace AzureOpenAIDemo.Api.Controllers
 
                     try
                     {
-                        generatedSqlQuery = await _azureOpenAiService.GenerateSqlQuery(rewrittenQuery, _databaseConnectionString, _databaseDescription, _tables, generatedSqlQuery, errorMessage);
+                        generatedSqlQuery = await _azureOpenAiService.GenerateSqlQuery(rewrittenQuery, generatedSqlQuery, errorMessage);
 
                         var results = await _databaseService.ExecuteQueryAsync(generatedSqlQuery);
 

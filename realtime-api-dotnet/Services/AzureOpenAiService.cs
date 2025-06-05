@@ -5,13 +5,16 @@
     using OpenAI.Chat;
     using AzureOpenAIDemo.Api.Controllers;
     using Azure.Core;
-    using SqlDbSchemaExtractor.Schema;
     using AzureOpenAIDemo.Api.Prompts;
+    using SqlDbSchemaExtractor;
+    using SqlDbSchemaExtractor.Schema;
 
     public class AzureOpenAiService
     {
         private readonly ChatClient _chatClient;
         private readonly ILogger<AzureOpenAIController> _logger;
+        private Nl2SqlConfigRoot _nl2SqlConfig;
+        private string _databaseConnectionString;
 
         public AzureOpenAiService(IConfiguration configuration, ILogger<AzureOpenAIController> logger)
         {
@@ -34,7 +37,12 @@
             );
 
             var chatDeploymentName = configuration["AzureOpenAI:ChatDeploymentName"];
-            _chatClient = azureOpenAIClient.GetChatClient(chatDeploymentName);
+            _chatClient = azureOpenAIClient.GetChatClient(chatDeploymentName);            
+            
+            // database connection details
+            _databaseConnectionString = configuration["DatabaseConnection"];
+
+            _nl2SqlConfig = configuration.GetSection("Nl2SqlConfig").Get<Nl2SqlConfigRoot>();
         }
 
         /// <summary>
@@ -99,15 +107,11 @@
         /// Generates a SQL query using the database schema and tables that will be targeted.
         /// </summary>
         /// <param name="rewrittenQuery">The enhanced, rewritten user query</param>
-        /// <param name="databaseConnectionString">SQL DB connection string</param>
-        /// <param name="databaseDescription">Description of the database</param>
-        /// <param name="tables">Pipe separated list of table names to be targeted with the SQL query</param>
         /// <returns>A SQL statement that can be executed against the database</returns>
-        public async Task<string> GenerateSqlQuery(string rewrittenQuery, string databaseConnectionString, string databaseDescription, string tables, string previousGeneratedSqlQuery = null, string sqlErrorMessage = null)
+        public async Task<string> GenerateSqlQuery(string rewrittenQuery, string previousGeneratedSqlQuery = null, string sqlErrorMessage = null)
         {
-            var sqlHarness = new SqlSchemaProviderHarness(databaseConnectionString, databaseDescription);
-            var tableNames = tables.Split("|");
-            var jsonSchema = await sqlHarness.ReverseEngineerSchemaJSONAsync(tableNames);
+            var sqlHarness = new SqlSchemaProviderHarness(_databaseConnectionString, _nl2SqlConfig.Database.Description);
+            var jsonSchema = await sqlHarness.ReverseEngineerSchemaJSONAsync(_nl2SqlConfig).ConfigureAwait(false);
 
             string sqlPrompt = CorePrompts.GetSqlGenerationPrompt(jsonSchema, previousGeneratedSqlQuery, sqlErrorMessage);
 
