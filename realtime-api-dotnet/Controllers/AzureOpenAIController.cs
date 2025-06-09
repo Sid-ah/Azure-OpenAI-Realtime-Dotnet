@@ -1,21 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
-using System;
-using System.Threading.Tasks;
-using Azure;
-using Azure.AI.OpenAI;
 using System.Text;
 using System.Text.Json;
-using System.Collections.Generic;
-using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.VisualBasic;
-using OpenAI.Chat;
-using Microsoft.SemanticKernel;
-using Microsoft.SemanticKernel.ChatCompletion;
-using Microsoft.SemanticKernel.Connectors.OpenAI;
 using realtime_api_dotnet.Services;
-using System.Text.Json.Serialization;
 
 namespace realtime_api_dotnet.Controllers;
 
