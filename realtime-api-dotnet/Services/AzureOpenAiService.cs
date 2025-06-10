@@ -1,13 +1,12 @@
-﻿namespace realtime_api_dotnet.Services;
-
-using Azure.AI.OpenAI;
+﻿using Azure.AI.OpenAI;
 using Azure;
 using OpenAI.Chat;
-using Azure.Core;
 using SqlDbSchemaExtractor;
 using SqlDbSchemaExtractor.Schema;
 using realtime_api_dotnet.Controllers;
 using realtime_api_dotnet.Prompts;
+
+namespace realtime_api_dotnet.Services;
 
 public class AzureOpenAiService
 {
