@@ -35,7 +35,9 @@ namespace DataImporter
                     throw new InvalidOperationException("Connection string not found in configuration");
                 }
 
-                string csvFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "2023-24 regular season statistics.csv");
+                string dataFileName = config["DataFileName"];
+
+                string csvFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, dataFileName);
 
                 Console.WriteLine($"Importing data from {csvFilePath}...");
 
