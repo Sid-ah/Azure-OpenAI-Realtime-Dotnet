@@ -28,6 +28,8 @@ The project consists of two main parts:
 - Session management
 - Detailed logging for debugging and monitoring
 - Intent recognition from the user's question to determine if the database shoould be queried or if the question should be answered directly by the LLM
+- Query rewrite of a user's question to include context from the chat history
+- NL2SQL functionality to query a SQL database based on user questions
 
 ## Prerequisites
 
