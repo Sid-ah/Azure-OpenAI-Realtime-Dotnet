@@ -85,8 +85,17 @@ Note: This project is only needed if you need to populate an Azure SQL Database.
      }
    }
    ````
-4. Ensure your database is seeded with data.
-5. Run the API:
+4. For NL2SQL to work well, column descriptions are crucial for the LLM to accurately translate natural language into SQL queries. To add column descriptions, use the sp_addextendedproperty stored procedure. Example:
+   ```
+   EXEC sp_addextendedproperty 
+    @name = N'MS_Description', 
+    @value = N'This column stores the user email address', 
+    @level0type = N'SCHEMA', @level0name = 'dbo',
+    @level1type = N'TABLE',  @level1name = 'Users',
+    @level2type = N'COLUMN', @level2name = 'Email';
+   ```
+5. Ensure your database is seeded with data.
+6. Run the API:
    ```
    dotnet run
    ```
