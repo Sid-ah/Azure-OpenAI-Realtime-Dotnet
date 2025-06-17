@@ -1,14 +1,14 @@
 // src/services/ApiService.js
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://localhost:7254/api/AzureOpenAI';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://localhost:7254';
 
 export const createSession = async (voice) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/sessions`, {
+    const response = await fetch(`${API_BASE_URL}/api/AzureOpenAI/sessions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ voice })
+      body: JSON.stringify({ Voice: voice })
     });
 
     if (!response.ok) {
@@ -25,7 +25,7 @@ export const createSession = async (voice) => {
 
 export const connectRTC = async (sdp, ephemeralKey, deploymentName, region) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/rtc`, {
+    const response = await fetch(`${API_BASE_URL}/api/AzureOpenAI/rtc`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -26,16 +26,26 @@ namespace DataImporter
                 IConfiguration config = new ConfigurationBuilder()
                     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
                     .AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true)
+                    .AddEnvironmentVariables()
                     .Build();
 
-                string connectionString = config.GetConnectionString("SqlServer");
+                string? connectionString = GetConnectionString(config);
 
                 if (string.IsNullOrEmpty(connectionString))
                 {
-                    throw new InvalidOperationException("Connection string not found in configuration");
+                    Console.WriteLine("Connection string configuration options:");
+                    Console.WriteLine("1. Set SQL_PASSWORD environment variable");
+                    Console.WriteLine("2. Create appsettings.Local.json with connection string");
+                    Console.WriteLine("3. Use Azure AD authentication");
+                    throw new InvalidOperationException("Valid connection string not found in configuration");
                 }
 
-                string dataFileName = config["DataFileName"];
+                string? dataFileName = config["DataFileName"];
+
+                if (string.IsNullOrEmpty(dataFileName))
+                {
+                    throw new InvalidOperationException("DataFileName not found in configuration");
+                }
 
                 string csvFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, dataFileName);
 
@@ -155,9 +165,12 @@ namespace DataImporter
                 foreach (var record in dynamicRecords)
                 {
                     var dictionary = new Dictionary<string, string>();
-                    foreach (var property in record as IDictionary<string, object>)
+                    if (record is IDictionary<string, object> recordDict)
                     {
-                        dictionary[property.Key] = property.Value?.ToString() ?? string.Empty;
+                        foreach (var property in recordDict)
+                        {
+                            dictionary[property.Key] = property.Value?.ToString() ?? string.Empty;
+                        }
                     }
                     records.Add(dictionary);
                 }
@@ -177,7 +190,8 @@ namespace DataImporter
             using (var command = new SqlCommand(sql, connection))
             {
                 command.Parameters.AddWithValue("@TableName", tableName);
-                int count = (int)await command.ExecuteScalarAsync();
+                var result = await command.ExecuteScalarAsync();
+                int count = result is int intResult ? intResult : 0;
                 return count > 0;
             }
         }
@@ -274,6 +288,40 @@ namespace DataImporter
                 return DBNull.Value;
             }
             return value;
+        }
+
+        private static string? GetConnectionString(IConfiguration config)
+        {
+            // Try to get connection string from configuration
+            string? baseConnectionString = config.GetConnectionString("SqlServer");
+            
+            if (string.IsNullOrEmpty(baseConnectionString))
+            {
+                return null;
+            }
+
+            // Check if it's a placeholder password that needs to be replaced
+            if (baseConnectionString.Contains("{your_password}"))
+            {
+                // Try to get password from environment variable
+                string? sqlPassword = Environment.GetEnvironmentVariable("SQL_PASSWORD");
+                
+                if (!string.IsNullOrEmpty(sqlPassword))
+                {
+                    Console.WriteLine("Using SQL Authentication with environment variable password");
+                    return baseConnectionString.Replace("{your_password}", sqlPassword);
+                }
+                
+                // Try Azure AD authentication
+                Console.WriteLine("No SQL password found, attempting Azure AD authentication");
+                return baseConnectionString
+                    .Replace("User ID=thecodepoet;Password={your_password};", "")
+                    .Replace("Persist Security Info=False;", "Authentication=Active Directory Default;");
+            }
+
+            // Connection string is already complete
+            Console.WriteLine("Using connection string from configuration");
+            return baseConnectionString;
         }
     }
 
