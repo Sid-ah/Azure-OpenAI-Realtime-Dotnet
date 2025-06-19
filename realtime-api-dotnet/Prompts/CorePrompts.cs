@@ -8,7 +8,7 @@ public class CorePrompts
     /// <summary>
     /// Default system prompt for general assistant behavior
     /// </summary>
-    public static string GetSystemmPrompt()
+    public static string GetSystemPrompt()
     {
         return @"You are an NBA statistics expert assistant. You provide accurate information about the 2023-24 regular season NBA player statistics.
                     Answer questions about player stats, team performance, and season highlights based on data you will query from a database.
