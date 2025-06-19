@@ -1,4 +1,3 @@
-// Models/RTCRequest.cs
 public class RTCRequest
 {
     public string Sdp { get; set; }

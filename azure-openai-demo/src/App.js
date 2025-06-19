@@ -32,6 +32,7 @@ function App() {
   const addMessage = (sender, text = '') => {
     // Only add messages with actual content
     if (text && text.trim()) {
+      console.log(`Adding ${sender} message to history`);
       addLog(`Adding ${sender} message to history`);
       setMessages(prevMessages => [...prevMessages, { sender, text }]);
     }
@@ -68,6 +69,7 @@ function App() {
         setCurrentTranscript={setCurrentTranscript}
         currentTranscript={currentTranscript}
         status={status}
+        messages={messages}
       />
 
       <Logs logs={logs} />

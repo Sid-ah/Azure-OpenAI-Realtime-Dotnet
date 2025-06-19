@@ -77,3 +77,6 @@ yarn-error.log
 .DS_Store
 .AppleDouble
 .LSOverride
+/realtime-api-dotnet/../DatabaseImporter/appsettings.Local.json
+/realtime-api-dotnet/../DatabaseImporter/appsettings.Local.json
+/realtime-api-dotnet/../DatabaseImporter/appsettings.Local.json

@@ -2,6 +2,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createSession, connectRTC } from '../services/ApiService';
 
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://localhost:7254/api/AzureOpenAI';
+
 function Controls({ 
   isConnected, 
   setIsConnected, 
@@ -12,10 +14,11 @@ function Controls({
   updateAssistantMessage, 
   setCurrentTranscript,
   currentTranscript,
-  status
+  status,
+  messages
 }) {
   const [isRecording, setIsRecording] = useState(false);
-  const [currentMessage, setCurrentMessage] = useState('');
+  const messageHistoryRef = useRef([]);
   
   const peerConnectionRef = useRef(null);
   const dataChannelRef = useRef(null);
@@ -30,21 +33,18 @@ function Controls({
   
   // Initialize audio context safely
   useEffect(() => {
-    // Lazy initialize AudioContext only when needed
-    if (!audioContextRef.current && typeof window !== 'undefined') {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (AudioContext) {
-        audioContextRef.current = new AudioContext({ sampleRate: 24000 });
+    return () => {
+    // Cleanup when component unmounts
+    if (audioContextRef.current) {
+      try {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      } catch (err) {
+        console.error("Error closing audio context:", err);
       }
     }
-    
-    return () => {
-      // Cleanup when component unmounts
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
-    };
-  }, []);
+  };
+}, []);
 
   const startConversation = async () => {
     try {
@@ -54,6 +54,12 @@ function Controls({
       const sessionResponse = await createSession(settings.voice);
       sessionIdRef.current = sessionResponse.id;
       ephKeyRef.current = sessionResponse.client_secret.value;
+
+      // Store the system prompt from the backend response
+      if (sessionResponse.system_prompt) {
+        systemPromptRef.current = sessionResponse.system_prompt;
+        addLog(`System prompt received (${systemPromptRef.current.length} chars)`);
+      }
       
       addLog(`Session ID → ${sessionIdRef.current}`);
       
@@ -67,22 +73,53 @@ function Controls({
     }
   };
 
+  // Add a ref to store the system prompt
+  const systemPromptRef = useRef(null);
+
   const stopConversation = () => {
-    stopRecording();
-    
-    if (dataChannelRef.current) dataChannelRef.current.close();
-    if (peerConnectionRef.current) peerConnectionRef.current.close();
-    if (audioStreamRef.current) audioStreamRef.current.getTracks().forEach(t => t.stop());
-    
-    peerConnectionRef.current = null;
+  stopRecording();
+  
+  // Close data channel and peer connection
+  if (dataChannelRef.current) {
+    try {
+      dataChannelRef.current.close();
+    } catch (err) {
+      // Ignore errors during cleanup
+    }
     dataChannelRef.current = null;
+  }
+  
+  if (peerConnectionRef.current) {
+    try {
+      peerConnectionRef.current.close();
+    } catch (err) {
+      // Ignore errors during cleanup
+    }
+    peerConnectionRef.current = null;
+  }
+  
+  // Stop audio tracks
+  if (audioStreamRef.current) {
+    audioStreamRef.current.getTracks().forEach(t => t.stop());
     audioStreamRef.current = null;
-    mediaRecorderRef.current = null;
-    
-    setIsRecording(false);
-    setIsConnected(false);
-    updateStatus('Disconnected');
-  };
+  }
+  
+  // Close audio context last
+  if (audioContextRef.current) {
+    try {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+      addLog('✅ Audio context closed');
+    } catch (err) {
+      addLog(`❌ Error closing audio context: ${err.message}`);
+    }
+  }
+  
+  mediaRecorderRef.current = null;
+  setIsRecording(false);
+  setIsConnected(false);
+  updateStatus('Disconnected');
+};
 
   const initializeWebRTC = async () => {
     peerConnectionRef.current = new RTCPeerConnection({
@@ -151,77 +188,31 @@ function Controls({
   };
 
   const startRecording = () => {
-    if (!mediaRecorderRef.current || isRecording) return;
-    setIsRecording(true);
-    mediaRecorderRef.current.start(100); // 100 ms chunks
-    updateStatus('Recording');
-
-    // Create an audio processor worklet for more reliable audio processing
-    let audioProcessor = null;
-    
-    const setupAudioProcessor = async () => {
-      if (!audioContextRef.current) {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        audioContextRef.current = new AudioContext({ sampleRate: 24000 });
+  if (!mediaRecorderRef.current || isRecording) return;
+  
+  setIsRecording(true);
+  mediaRecorderRef.current.start(100); // 100 ms chunks
+  updateStatus('Recording');
+  
+  // Set up the audio processor with better error handling
+  setupAudioProcessor().then(processor => {
+    if (processor) {
+      if (audioBufferRef.current) {
+        // Clear any existing processor first
+        clearInterval(audioBufferRef.current);
       }
-      
-      try {
-        // Create a direct input source from the audio stream
-        const source = audioContextRef.current.createMediaStreamSource(audioStreamRef.current);
-        
-        // Create an analyzer to get PCM data directly
-        const analyzer = audioContextRef.current.createAnalyser();
-        analyzer.fftSize = 2048;
-        source.connect(analyzer);
-        
-        // Get PCM data directly from the analyzer
-        const pcmProcessor = () => {
-          const dataArray = new Float32Array(analyzer.fftSize);
-          analyzer.getFloatTimeDomainData(dataArray);
-          
-          // Convert to 16-bit PCM
-          const pcmData = new Int16Array(dataArray.length);
-          
-          // Convert Float32 to Int16
-          for (let i = 0; i < dataArray.length; i++) {
-            const s = Math.max(-1, Math.min(1, dataArray[i]));
-            pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-          }
-          
-          // Convert to base64
-          const base64 = arrayBufferToBase64(pcmData.buffer);
-          
-          // Send to server if connection is open
-          if (dataChannelRef.current?.readyState === 'open' && isRecording) {
-            dataChannelRef.current.send(JSON.stringify({
-              type: 'input_audio_buffer.append',
-              audio: base64
-            }));
-          }
-        };
-        
-        // Process audio at regular intervals
-        audioProcessor = setInterval(pcmProcessor, 100);
-        return audioProcessor;
-      } catch (error) {
-        addLog(`❌ Audio processor setup error: ${error.message}`);
-        return null;
-      }
-    };
-    
-    // Set up the audio processor
-    setupAudioProcessor().then(processor => {
       audioBufferRef.current = processor;
-    });
-    
-    // For compatibility, still handle the MediaRecorder data
-    mediaRecorderRef.current.ondataavailable = async (evt) => {
-      if (evt.data.size === 0) return;
-      // We're not using this data anymore as we're processing audio directly
-      // But we'll keep the event handler for debugging purposes
-      addLog(`Audio chunk size: ${evt.data.size}`);
-    };
+    }
+  }).catch(err => {
+    addLog(`❌ Failed to set up audio processor: ${err.message}`);
+  });
+  
+  // For debugging purposes
+  mediaRecorderRef.current.ondataavailable = async (evt) => {
+    if (evt.data.size === 0) return;
+    addLog(`Audio chunk size: ${evt.data.size}`);
   };
+};
   
   // Helper function to convert AudioBuffer to 16-bit PCM
   const convertToPCM16 = (audioBuffer) => {
@@ -247,6 +238,67 @@ function Controls({
     }
     return btoa(binary);
   };
+
+  const setupAudioProcessor = async () => {
+  try {
+    // Create a new AudioContext if none exists or if the current one is closed
+    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      audioContextRef.current = new AudioContext({ sampleRate: 24000 });
+      addLog('✅ Created new AudioContext');
+    } else if (audioContextRef.current.state === 'suspended') {
+      // Resume context if it's suspended
+      await audioContextRef.current.resume();
+      addLog('✅ Resumed AudioContext');
+    }
+    
+    // Create the audio processing pipeline
+    const source = audioContextRef.current.createMediaStreamSource(audioStreamRef.current);
+    
+    // Create an analyzer for PCM data
+    const analyzer = audioContextRef.current.createAnalyser();
+    analyzer.fftSize = 2048;
+    source.connect(analyzer);
+    
+    // Process function to convert and send audio data
+    const pcmProcessor = () => {
+      if (!isRecording || !dataChannelRef.current || dataChannelRef.current.readyState !== 'open') {
+        return;
+      }
+      
+      const dataArray = new Float32Array(analyzer.fftSize);
+      analyzer.getFloatTimeDomainData(dataArray);
+      
+      // Convert Float32 to Int16 PCM
+      const pcmData = new Int16Array(dataArray.length);
+      for (let i = 0; i < dataArray.length; i++) {
+        const s = Math.max(-1, Math.min(1, dataArray[i]));
+        pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      }
+      
+      // Convert to base64 for sending
+      const base64 = arrayBufferToBase64(pcmData.buffer);
+      
+      // Send to Azure OpenAI
+      try {
+        dataChannelRef.current.send(JSON.stringify({
+          type: 'input_audio_buffer.append',
+          audio: base64
+        }));
+      } catch (err) {
+        addLog(`❌ Error sending audio data: ${err.message}`);
+      }
+    };
+    
+    // Process audio at regular intervals (100ms)
+    const interval = setInterval(pcmProcessor, 100);
+    addLog('✅ Audio processor set up successfully');
+    return interval;
+  } catch (error) {
+    addLog(`❌ Audio processor setup error: ${error.message}`);
+    return null;
+  }
+};
 
   const stopRecording = () => {
     if (!isRecording) return;
@@ -283,20 +335,22 @@ function Controls({
     addLog('DataChannel open – sending session.update');
     updateStatus('Connected');
 
+    console.log('HandleDataChannelOpen System prompt:', systemPromptRef.current);
+
     const cfg = {
       type: 'session.update',
       session: {
-        instructions: 'You are a helpful AI assistant. Respond courteously and concisely.',
+        instructions: systemPromptRef.current,
         modalities: ['audio', 'text'],
         input_audio_transcription: {
           model: 'whisper-1'
         },
         turn_detection: {
           type: 'server_vad',
-          threshold: 0.5,
-          prefix_padding_ms: 300,
-          silence_duration_ms: 350,
-          create_response: true
+          threshold: 0.6,
+          prefix_padding_ms: 500,
+          silence_duration_ms: 1200,
+          create_response: false // disabling auto-response so the response is only provided once the backend has returned data
         }
       }
     };
@@ -314,10 +368,131 @@ function Controls({
         break;
 
       case 'conversation.item.input_audio_transcription.completed':
-        // Add user message from speech transcription
-        addMessage('user', msg.transcript ?? '');
-        break;
+        const transcript = msg.transcript ?? '';
 
+        // Update both the ref and the state for the message history
+        messageHistoryRef.current = [...messageHistoryRef.current, { sender: 'user', text: transcript }];
+
+        // Add user message from speech transcription
+        addMessage('user', transcript);
+
+        // First use the LLM to determine if this is a statistical question where we need to call the query API in the backend, or just a general question where the LLM can respond directly
+        if (dataChannelRef.current?.readyState === 'open') {
+          setCurrentTranscript('Analyzing question...');
+
+          console.log("Messages array length: ", messageHistoryRef.current.length);
+          console.log("Message array content:", JSON.stringify(messageHistoryRef.current));
+
+          // make a call to AOAI to classify the intent of the question
+          fetch(`${API_BASE_URL}/classify-intent`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: transcript, messages: messageHistoryRef.current })
+          })
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(`Intent classification failed with ${response.status}`);
+            }
+            return response.json();
+          })
+          .then(isStatisticalQuery => {
+            addLog(`Intent detected: ${isStatisticalQuery ? 'Statistical' : 'Conversational'}`);
+            console.log(`Intent detected: ${isStatisticalQuery ? 'Statistical' : 'Conversational'}`);
+
+            if (isStatisticalQuery) {
+              // Show loading state
+              updateStatus('Fetching data...');
+              setCurrentTranscript('Searching for NBA statistics...');
+
+              console.log("Messages array length: ", messageHistoryRef.current.length);
+              console.log("Message array content:", JSON.stringify(messageHistoryRef.current));
+
+              console.log('querying SQL results for:', transcript);
+              console.log('system prompt is:', systemPromptRef.current);             
+
+              // Get SQL results first before allowing LLM to respond
+              fetch(`${API_BASE_URL}/query`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: transcript, messages: messageHistoryRef.current })
+              })
+              .then(response => {
+                if (!response.ok) {
+                  throw new Error(`Server responded with ${response.status}`);
+                }
+                console.log('Returning response:', response.json);
+                return response.json();
+              })
+              .then(data => {
+                // data is received successfully
+                if (dataChannelRef.current?.readyState === 'open') {
+                  // Format the SQL results for the LLM
+                  const records = data.records || data.data || data;
+                  const recordCount = Array.isArray(records) ? records.length : 0;
+                  addLog(`✅ SQL results received: ${recordCount} records`);
+
+                  const formattedResults = formatSqlResultsForLLM(data);
+                  console.log('Formatted SQL results:', formattedResults);
+
+                  // Send a new message with SQL results
+                  dataChannelRef.current.send(JSON.stringify({
+                    type: 'conversation.item.create',
+                    item: {
+                      type: 'message',
+                      role: 'user',
+                      content: [
+                        {
+                          type: 'input_text',
+                          text: `Question: ${transcript}\n\nHere are the NBA statistics that answer this question:\n${formattedResults}\n\nPlease summarize these statistics in a clear, concise response.`
+                        }
+                      ]
+                    }
+                  }));
+
+                  // Request a response after creating the item
+                  dataChannelRef.current.send(JSON.stringify({
+                    type: 'response.create'
+                  }));
+                }
+              });
+            } else {
+              // It's a conversational query, let the LLM respond naturally
+              addLog('💬 Conversational message detected by Azure OpenAI');
+              
+              // Send the original question directly
+              dataChannelRef.current.send(JSON.stringify({
+                type: 'conversation.item.create',
+                item: {
+                  type: 'message',
+                  role: 'user',
+                  content: [
+                    {
+                      type: 'input_text',
+                      text: transcript
+                    }
+                  ]
+                }
+              }));
+
+              // Request a response
+              dataChannelRef.current.send(JSON.stringify({
+                type: 'response.create'
+              }));
+
+              updateStatus('Generating response...');
+            }
+          })
+        .catch(err => {
+          console.log('Error in intent processing:', err);
+          // Handle error from backend
+          addLog(`❌ Intent detection error: ${err.message}`);
+
+          // Fall back to direct LLM response
+          handleDirectLLMResponse(transcript);
+        });
+      }
+      break;
+          
       case 'response.created':
         // Reset transcript when a response starts
         setCurrentTranscript('');
@@ -339,6 +514,14 @@ function Controls({
           const transcript = msg.item.content[0].transcript;
           addLog(`Assistant response received: ${transcript.substring(0, 20)}...`);
           addMessage('assistant', transcript);
+
+          // Update both the ref and the state
+          messageHistoryRef.current = [...messageHistoryRef.current, { sender: 'assistant', text: transcript }];
+          //setLocalMessageHistory(messageHistoryRef.current);
+
+          console.log("Assistant response added to history, new length:", messageHistoryRef.current.length);
+          console.log("Full message history:", JSON.stringify(messageHistoryRef.current));
+
           // Clear current transcript placeholder after adding to history
           setCurrentTranscript('');
         }
@@ -351,6 +534,7 @@ function Controls({
         break;
 
       case 'error':
+        console.error('Error message from server:', msg.error);
         addLog(`❌ ${msg.error?.message || 'Unknown error'}`);
         updateStatus(`Error: ${msg.error?.message || ''}`);
         break;
@@ -358,6 +542,67 @@ function Controls({
       default:
         // other event types ignored
     }
+  };
+
+  // Helper function for direct LLM response when classification fails
+  const handleDirectLLMResponse = (text) => {
+    if (dataChannelRef.current?.readyState === 'open') {
+      dataChannelRef.current.send(JSON.stringify({
+        type: 'conversation.item.create',
+        item: {
+          type: 'message',
+          role: 'user',
+          content: [
+            {
+              type: 'input_text',
+              text
+            }
+          ]
+        }
+      }));
+      
+      dataChannelRef.current.send(JSON.stringify({
+        type: 'response.create'
+      }));
+      
+      updateStatus('Responding...');
+    }
+  };
+
+  // Helper function to format SQL results for LLM summarization
+  const formatSqlResultsForLLM = (data) => {
+    // Handle different response formats that might come from your backend
+    const records = data.records || data.data || data;
+    
+    if (!records || !Array.isArray(records) || records.length === 0) {
+      return "No data found in the database for this query.";
+    }
+    
+    // Format as markdown table for better LLM processing
+    let result = '';
+    
+    // Get column headers from first record
+    const headers = Object.keys(records[0]);
+    
+    // Format table header
+    result += '| ' + headers.join(' | ') + ' |\n';
+    result += '| ' + headers.map(() => '---').join(' | ') + ' |\n';
+    
+    // Add rows (limit to max 20 rows to avoid token limit issues)
+    const maxRows = Math.min(records.length, 20);
+    for (let i = 0; i < maxRows; i++) {
+      result += '| ' + headers.map(h => {
+        const val = records[i][h];
+        return val === null || val === undefined ? 'N/A' : String(val);
+      }).join(' | ') + ' |\n';
+    }
+    
+    // Add summary of remaining rows if any
+    if (records.length > maxRows) {
+      result += `\n*...and ${records.length - maxRows} more rows*\n`;
+    }
+    
+    return result;
   };
 
   return (
