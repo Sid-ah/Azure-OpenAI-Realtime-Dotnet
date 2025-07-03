@@ -52,14 +52,13 @@ public class AzureOpenAiService
     /// <returns>true if this is a statistical query, false otherwise.</returns>
     public async Task<bool> ClassifyIntent(string conversationHistory, string userQuery)
     {
-        // TODO: We are currently not rewriting the query, but it may be possible a follow up query which is about statitistics may be inteprepted as conversational
-        // without taking into account the chat history context, so this may be needed
+        // Use conversation history to ensure follow-up questions are classified correctly
         var intentDetectionPrompt = CorePrompts.GetIntentClassificationPrompt(conversationHistory);
 
         ChatCompletion completion = await _chatClient.CompleteChatAsync(
             [
                 new SystemChatMessage(intentDetectionPrompt),
-                new UserChatMessage($"Classify this message: '{userQuery}'. Is this asking about NBA basketball statistics, players, teams, or scores (respond with STATISTICAL) or is it just a greeting or general conversation not related to data lookup (respond with CONVERSATIONAL)?")
+                new UserChatMessage($"Classify this message: '{userQuery}'. Is this asking about Formula One racing statistics, drivers, teams, or race results (respond with STATISTICAL) or is it just a greeting or general conversation not related to data lookup (respond with CONVERSATIONAL)?")
             ]);
 
         var responseText = completion.Content[0].Text;
@@ -72,9 +71,9 @@ public class AzureOpenAiService
 
     /// <summary>
     /// Uses the LLM to look at conversation history to rewrite, if necessary, the current user query. For example, if the user
-    /// previously asked who the highest scoring player was in the 2023-24 NBA season and receives a players name then follows
-    /// up and simply asks "How many steals did they have?", the rewritten query will be something similar to "How many steals
-    /// did {players name} have during the 2023-24 season" which will allow for a proper SQL query to be generated whereas
+    /// previously asked who won the most races in a recent Formula One season and receives a driver's name then follows
+    /// up and simply asks "How many points did they score?", the rewritten query will be something similar to "How many points
+    /// did {driver name} score during that season" which will allow for a proper SQL query to be generated whereas
     /// the original query would not.
     /// </summary>
     /// <param name="conversationHistory">Full conversation history between user and agent</param>
@@ -83,9 +82,9 @@ public class AzureOpenAiService
     public async Task<string> RewriteQuery(string conversationHistory, string userQuery)
     {
         // For follow up questions, we want to ensure we have a query that represents any context. For example,
-        // if the user asks "Who had the most steals on the season?" and the LLM answers "Marcus Smart". The
-        // follow up may be "How many steals did he have?". Rather than generate a query for "How many steals did he have?",
-        // we'll use the LLM to rewrite this query using history so it will be something like "How many steals did Marcus Smart have on the season?"
+        // if the user asks "Who won the most races this season?" and the LLM answers "Max Verstappen".
+        // The follow up may be "How many points did he score?". Rather than generate a query for "How many points did he score?",
+        // we'll use the LLM to rewrite this query using history so it will be something like "How many points did Max Verstappen score in the season?"
         var queryRewritePrompt = CorePrompts.GetQueryRewritePrompt(conversationHistory);
 
         ChatCompletion completion = await _chatClient.CompleteChatAsync(

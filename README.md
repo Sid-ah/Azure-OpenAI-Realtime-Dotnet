@@ -2,7 +2,7 @@
 
 This project demonstrates the integration between a React frontend and a .NET API backend to create a real-time voice chat application using Azure OpenAI's Realtime API. The application utilizes WebRTC for bidirectional audio communication and showcases streaming responses from Azure OpenAI's GPT-4o models.
 
-The backend supports answering questions using data stored in a SQL database through Natural Language to SQL (NL2SQL) capabilities. The current implementation uses NBA sports data, but the system can be adapted to any domain by updating the database content and the prompt templates.
+The backend supports answering questions using data stored in a SQL database through Natural Language to SQL (NL2SQL) capabilities. This version ships with Formula One race statistics spanning the last decade (2014–2023), including grand prix winners for major circuits like Austin, Miami, Jeddah, and Singapore. The system can be adapted to any domain by updating the database content and the prompt templates.
 
 > **Note:** This project uses Azure OpenAI's Realtime API (preview), which provides low-latency, streaming interactions with Azure OpenAI models.
 
@@ -77,17 +77,17 @@ The `DatabaseImporter` project is a utility to populate an Azure SQL Database wi
      "ConnectionStrings": {
        "SqlServer": "Server=your-server.database.windows.net;Database=your-database;User Id=your-username;Password=your-password;Encrypt=True;TrustServerCertificate=False;"
      },
-     "DataFileName": "your-data-file.csv"
-   }
-   ```
-3. Place your CSV data file in the `DatabaseImporter` directory
+  "DataFileName": "formula_one_circuit_winners_10_years.csv"
+  }
+  ```
+3. Place your CSV data file in the `DatabaseImporter` directory. The provided `formula_one_circuit_winners_10_years.csv` lists grand prix winners for multiple circuits from 2014–2023.
 4. Run the importer to populate your database:
    ```bash
    cd DatabaseImporter
    dotnet run
    ```
 
-> **Note:** The importer creates a table called `NBAStats` with an auto-generated schema based on your CSV headers. For production use, consider creating proper table schemas with appropriate data types.
+> **Note:** The importer creates a table called `F1Stats` with an auto-generated schema based on your CSV headers. For production use, consider creating proper table schemas with appropriate data types.
 
 ### Step 2: Backend API Setup (.NET)
 
@@ -105,12 +105,12 @@ The `DatabaseImporter` project is a utility to populate an Azure SQL Database wi
      "DatabaseConnection": "Server=your-server.database.windows.net;Database=your-database;User Id=your-username;Password=your-password;Encrypt=True;TrustServerCertificate=False;",
      "Nl2SqlConfig": {
        "database": {
-         "description": "Stats for NBA players from the 2023-24 season",
+       "description": "Statistics for Formula One circuit winners and driver records from 2014-2023",
          "schemas": [
            {
              "name": "dbo",
              "tables": [
-               "NBAStats"
+               "F1Stats"
              ]
            }
          ]
@@ -153,17 +153,17 @@ For optimal NL2SQL performance, add column descriptions to your database tables.
 -- Example: Adding descriptions to improve NL2SQL accuracy
 EXEC sp_addextendedproperty 
   @name = N'MS_Description', 
-  @value = N'Player name in the format: FirstName LastName', 
+  @value = N'Driver name in the format: FirstName LastName',
   @level0type = N'SCHEMA', @level0name = 'dbo',
-  @level1type = N'TABLE',  @level1name = 'NBAStats',
-  @level2type = N'COLUMN', @level2name = 'PlayerName';
+  @level1type = N'TABLE',  @level1name = 'F1Stats',
+  @level2type = N'COLUMN', @level2name = 'DriverName';
 
 EXEC sp_addextendedproperty 
   @name = N'MS_Description', 
-  @value = N'Points scored per game during the 2023-24 season', 
+  @value = N'Points scored during that season',
   @level0type = N'SCHEMA', @level0name = 'dbo',
-  @level1type = N'TABLE',  @level1name = 'NBAStats',
-  @level2type = N'COLUMN', @level2name = 'PointsPerGame';
+  @level1type = N'TABLE',  @level1name = 'F1Stats',
+  @level2type = N'COLUMN', @level2name = 'Points';
 ```
 
 ## Usage

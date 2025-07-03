@@ -23,7 +23,10 @@
     <None Update="appsettings.Local.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="2023-24 regular season statistics.csv">
+    <None Update="formula_one_records_10_years.csv">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="formula_one_circuit_winners_10_years.csv">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

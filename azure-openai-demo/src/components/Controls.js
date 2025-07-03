@@ -402,7 +402,7 @@ function Controls({
             if (isStatisticalQuery) {
               // Show loading state
               updateStatus('Fetching data...');
-              setCurrentTranscript('Searching for NBA statistics...');
+              setCurrentTranscript('Searching for Formula One statistics...');
 
               console.log("Messages array length: ", messageHistoryRef.current.length);
               console.log("Message array content:", JSON.stringify(messageHistoryRef.current));
@@ -443,7 +443,7 @@ function Controls({
                       content: [
                         {
                           type: 'input_text',
-                          text: `Question: ${transcript}\n\nHere are the NBA statistics that answer this question:\n${formattedResults}\n\nPlease summarize these statistics in a clear, concise response.`
+                          text: `Question: ${transcript}\n\nHere are the Formula One statistics that answer this question:\n${formattedResults}\n\nPlease summarize these statistics in a clear, concise response.`
                         }
                       ]
                     }

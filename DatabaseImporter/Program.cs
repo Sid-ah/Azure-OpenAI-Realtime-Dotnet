@@ -17,8 +17,8 @@ namespace DataImporter
     {
         public static async Task Main(string[] args)
         {
-            Console.WriteLine("NBA Statistics Data Importer");
-            Console.WriteLine("============================");
+            Console.WriteLine("Formula One Statistics Data Importer");
+            Console.WriteLine("=====================================");
 
             try
             {
@@ -112,15 +112,15 @@ namespace DataImporter
             try
             {
                 // Create the table if it doesn't exist
-                bool tableExists = await CheckIfTableExistsAsync(connection, "NBAStats");
+                bool tableExists = await CheckIfTableExistsAsync(connection, "F1Stats");
                 if (!tableExists)
                 {
-                    await CreateTableAsync(connection, "NBAStats", columnNames);
-                    Console.WriteLine("Created new table: NBAStats");
+                    await CreateTableAsync(connection, "F1Stats", columnNames);
+                    Console.WriteLine("Created new table: F1Stats");
                 }
                 else
                 {
-                    Console.WriteLine("Using existing table: NBAStats");
+                    Console.WriteLine("Using existing table: F1Stats");
                 }
 
                 // Import data in batches for better performance
@@ -136,7 +136,7 @@ namespace DataImporter
                     batchCount++;
                     Console.WriteLine($"Importing batch {batchCount} ({batch.Count} records)...");
 
-                    int importedCount = await BulkInsertAsync(connection, "NBAStats", batch, columnNames, result.Errors);
+                    int importedCount = await BulkInsertAsync(connection, "F1Stats", batch, columnNames, result.Errors);
                     totalImported += importedCount;
 
                     Console.WriteLine($"Imported {totalImported} records so far");
