@@ -17,8 +17,8 @@ namespace DataImporter
     {
         public static async Task Main(string[] args)
         {
-            Console.WriteLine("NBA Statistics Data Importer");
-            Console.WriteLine("============================");
+            Console.WriteLine("Formula One Statistics Data Importer");
+            Console.WriteLine("=====================================");
 
             try
             {
@@ -40,33 +40,68 @@ namespace DataImporter
                     throw new InvalidOperationException("Valid connection string not found in configuration");
                 }
 
-                string? dataFileName = config["DataFileName"];
+                string[] dataFiles = config.GetSection("DataFiles").Get<string[]>() ?? Array.Empty<string>();
 
-                if (string.IsNullOrEmpty(dataFileName))
+                if (dataFiles.Length == 0)
                 {
-                    throw new InvalidOperationException("DataFileName not found in configuration");
+                    throw new InvalidOperationException("DataFiles not found in configuration");
                 }
 
-                string csvFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, dataFileName);
+                var allImportResults = new List<ImportResult>();
 
-                Console.WriteLine($"Importing data from {csvFilePath}...");
-
-                // Import the data
-                var importResults = await ImportCsvDataToSqlAsync(csvFilePath, connectionString);
-
-                // Display results
-                Console.WriteLine($"Import completed. {importResults.RowsImported} rows imported.");
-                if (importResults.Errors.Any())
+                foreach (var file in dataFiles)
                 {
-                    Console.WriteLine($"{importResults.Errors.Count} errors occurred:");
-                    foreach (var error in importResults.Errors.Take(5))
+                    string csvFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, file);
+                    string tableName = Path.GetFileNameWithoutExtension(file) switch
+                    {
+                        "formula_one_records_10_years" => "F1Records",
+                        "formula_one_circuit_winners_10_years" => "F1CircuitWinners",
+                        "formula_one_results_sample" => "F1ResultsSample",
+                        "formula_one_constructor_champions_10_years" => "F1ConstructorChampions",
+                        _ => Path.GetFileNameWithoutExtension(file)
+                    };
+
+                    Console.WriteLine($"Importing data from {csvFilePath} into table {tableName}...");
+
+                    var importResults = await ImportCsvDataToSqlAsync(csvFilePath, connectionString, tableName);
+                    allImportResults.Add(importResults);
+
+                    Console.WriteLine($"Import completed. {importResults.RowsImported} rows imported to {tableName}.");
+
+                    if (importResults.Errors.Any())
+                    {
+                        Console.WriteLine($"{importResults.Errors.Count} errors occurred:");
+                        foreach (var error in importResults.Errors.Take(5))
+                        {
+                            Console.WriteLine($"- {error}");
+                        }
+
+                        if (importResults.Errors.Count > 5)
+                        {
+                            Console.WriteLine($"... and {importResults.Errors.Count - 5} more errors");
+                        }
+                    }
+                }
+
+                // Summary of all imports
+                var totalErrors = allImportResults.SelectMany(r => r.Errors).ToList();
+                var totalRowsImported = allImportResults.Sum(r => r.RowsImported);
+
+                Console.WriteLine($"\nImport Summary:");
+                Console.WriteLine($"Total rows imported: {totalRowsImported}");
+                
+                if (totalErrors.Any())
+                {
+                    Console.WriteLine($"Total errors: {totalErrors.Count}");
+                    Console.WriteLine("First few errors:");
+                    foreach (var error in totalErrors.Take(5))
                     {
                         Console.WriteLine($"- {error}");
                     }
 
-                    if (importResults.Errors.Count > 5)
+                    if (totalErrors.Count > 5)
                     {
-                        Console.WriteLine($"... and {importResults.Errors.Count - 5} more errors");
+                        Console.WriteLine($"... and {totalErrors.Count - 5} more errors");
                     }
                 }
             }
@@ -81,7 +116,7 @@ namespace DataImporter
             Console.ReadKey();
         }
 
-        private static async Task<ImportResult> ImportCsvDataToSqlAsync(string csvFilePath, string connectionString)
+        private static async Task<ImportResult> ImportCsvDataToSqlAsync(string csvFilePath, string connectionString, string tableName)
         {
             var result = new ImportResult();
 
@@ -101,26 +136,26 @@ namespace DataImporter
             using (SqlConnection conn = new SqlConnection(connectionString))
             {
                 await conn.OpenAsync();
-                await ConnectAndImport(conn, csvRecords, columnNames, result);
+                await ConnectAndImport(conn, tableName, csvRecords, columnNames, result);
             }
 
             return result;
         }
 
-        private static async Task ConnectAndImport(SqlConnection connection, List<Dictionary<string, string>> csvRecords, List<string> columnNames, ImportResult result)
+        private static async Task ConnectAndImport(SqlConnection connection, string tableName, List<Dictionary<string, string>> csvRecords, List<string> columnNames, ImportResult result)
         {
             try
             {
                 // Create the table if it doesn't exist
-                bool tableExists = await CheckIfTableExistsAsync(connection, "NBAStats");
+                bool tableExists = await CheckIfTableExistsAsync(connection, tableName);
                 if (!tableExists)
                 {
-                    await CreateTableAsync(connection, "NBAStats", columnNames);
-                    Console.WriteLine("Created new table: NBAStats");
+                    await CreateTableAsync(connection, tableName, columnNames);
+                    Console.WriteLine($"Created new table: {tableName}");
                 }
                 else
                 {
-                    Console.WriteLine("Using existing table: NBAStats");
+                    Console.WriteLine($"Using existing table: {tableName}");
                 }
 
                 // Import data in batches for better performance
@@ -136,7 +171,7 @@ namespace DataImporter
                     batchCount++;
                     Console.WriteLine($"Importing batch {batchCount} ({batch.Count} records)...");
 
-                    int importedCount = await BulkInsertAsync(connection, "NBAStats", batch, columnNames, result.Errors);
+                    int importedCount = await BulkInsertAsync(connection, tableName, batch, columnNames, result.Errors);
                     totalImported += importedCount;
 
                     Console.WriteLine($"Imported {totalImported} records so far");
