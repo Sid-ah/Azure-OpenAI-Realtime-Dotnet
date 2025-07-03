@@ -58,7 +58,7 @@ public class AzureOpenAiService
         ChatCompletion completion = await _chatClient.CompleteChatAsync(
             [
                 new SystemChatMessage(intentDetectionPrompt),
-                new UserChatMessage($"Classify this message: '{userQuery}'. Is this asking about Formula One racing statistics, drivers, teams, or race results (respond with STATISTICAL) or is it just a greeting or general conversation not related to data lookup (respond with CONVERSATIONAL)?")
+                new UserChatMessage($"Classify this message: '{userQuery}'. Is this asking about Formula One racing statistics, drivers, teams, constructor championships, or race results (respond with STATISTICAL) or is it just a greeting or general conversation not related to data lookup (respond with CONVERSATIONAL)?")
             ]);
 
         var responseText = completion.Content[0].Text;
