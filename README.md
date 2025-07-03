@@ -127,13 +127,19 @@ The `DatabaseImporter` project is a utility to populate an Azure SQL Database wi
    }
    ```
 
-3. Install required packages and run the API:
+3. Install required packages and trust the development certificate:
    ```bash
    cd realtime-api-dotnet
    dotnet restore
-   dotnet run
+   # Trust the HTTPS development certificate (required for localhost HTTPS)
+   dotnet dev-certs https --trust
    ```
-   The API will be available at `http://localhost:5126` by default
+
+4. Run the API:
+   ```bash
+   dotnet run --launch-profile https
+   ```
+   The API will be available at `https://localhost:7254` by default
 
 > **Important:** Ensure your Azure OpenAI resource has both a GPT-4o model deployed for chat completion and a GPT-4o Realtime model deployed for the streaming audio functionality.
 
@@ -177,7 +183,7 @@ EXEC sp_addextendedproperty
 ## Usage
 
 1. **Start the Application**:
-   - Ensure the .NET API is running (`dotnet run` in `realtime-api-dotnet` directory)
+   - Ensure the .NET API is running (`dotnet run --launch-profile https` in `realtime-api-dotnet` directory)
    - Launch the React frontend (`npm start` in `azure-openai-demo` directory)
    - Open your browser to `http://localhost:3000`
 

@@ -47,6 +47,8 @@ namespace DataImporter
                     throw new InvalidOperationException("DataFiles not found in configuration");
                 }
 
+                var allImportResults = new List<ImportResult>();
+
                 foreach (var file in dataFiles)
                 {
                     string csvFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, file);
@@ -62,6 +64,7 @@ namespace DataImporter
                     Console.WriteLine($"Importing data from {csvFilePath} into table {tableName}...");
 
                     var importResults = await ImportCsvDataToSqlAsync(csvFilePath, connectionString, tableName);
+                    allImportResults.Add(importResults);
 
                     Console.WriteLine($"Import completed. {importResults.RowsImported} rows imported to {tableName}.");
 
@@ -79,17 +82,26 @@ namespace DataImporter
                         }
                     }
                 }
-                if (importResults.Errors.Any())
+
+                // Summary of all imports
+                var totalErrors = allImportResults.SelectMany(r => r.Errors).ToList();
+                var totalRowsImported = allImportResults.Sum(r => r.RowsImported);
+
+                Console.WriteLine($"\nImport Summary:");
+                Console.WriteLine($"Total rows imported: {totalRowsImported}");
+                
+                if (totalErrors.Any())
                 {
-                    Console.WriteLine($"{importResults.Errors.Count} errors occurred:");
-                    foreach (var error in importResults.Errors.Take(5))
+                    Console.WriteLine($"Total errors: {totalErrors.Count}");
+                    Console.WriteLine("First few errors:");
+                    foreach (var error in totalErrors.Take(5))
                     {
                         Console.WriteLine($"- {error}");
                     }
 
-                    if (importResults.Errors.Count > 5)
+                    if (totalErrors.Count > 5)
                     {
-                        Console.WriteLine($"... and {importResults.Errors.Count - 5} more errors");
+                        Console.WriteLine($"... and {totalErrors.Count - 5} more errors");
                     }
                 }
             }
