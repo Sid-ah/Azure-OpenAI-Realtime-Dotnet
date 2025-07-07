@@ -2,7 +2,7 @@
 
 This project demonstrates the integration between a React frontend and a .NET API backend to create a real-time voice chat application using Azure OpenAI's Realtime API. The application utilizes WebRTC for bidirectional audio communication and showcases streaming responses from Azure OpenAI's GPT-4o models.
 
-The backend supports answering questions using data stored in a SQL database through Natural Language to SQL (NL2SQL) capabilities. The current implementation uses NBA sports data, but the system can be adapted to any domain by updating the database content and the prompt templates.
+The backend supports answering questions using data stored in a SQL database through Natural Language to SQL (NL2SQL) capabilities. This version ships with Formula One race statistics spanning the last decade (2014–2023), including grand prix winners for major circuits like Austin, Miami, Jeddah, and Singapore as well as constructor championship results. The system can be adapted to any domain by updating the database content and the prompt templates.
 
 > **Note:** This project uses Azure OpenAI's Realtime API (preview), which provides low-latency, streaming interactions with Azure OpenAI models.
 
@@ -77,17 +77,22 @@ The `DatabaseImporter` project is a utility to populate an Azure SQL Database wi
      "ConnectionStrings": {
        "SqlServer": "Server=your-server.database.windows.net;Database=your-database;User Id=your-username;Password=your-password;Encrypt=True;TrustServerCertificate=False;"
      },
-     "DataFileName": "your-data-file.csv"
-   }
-   ```
-3. Place your CSV data file in the `DatabaseImporter` directory
+  "DataFiles": [
+    "formula_one_records_10_years.csv",
+    "formula_one_circuit_winners_10_years.csv",
+    "formula_one_constructor_champions_10_years.csv",
+    "formula_one_results_sample.csv"
+  ]
+  }
+  ```
+3. Place the CSV data files in the `DatabaseImporter` directory. These files provide driver records, circuit winners, constructor champions, and a small results sample from the 2014–2023 seasons.
 4. Run the importer to populate your database:
    ```bash
    cd DatabaseImporter
    dotnet run
    ```
 
-> **Note:** The importer creates a table called `NBAStats` with an auto-generated schema based on your CSV headers. For production use, consider creating proper table schemas with appropriate data types.
+> **Note:** The importer creates tables automatically based on each CSV file name (e.g. `F1Records`, `F1CircuitWinners`). The schemas are inferred from the CSV headers. For production use, create explicit tables with appropriate data types.
 
 ### Step 2: Backend API Setup (.NET)
 
@@ -105,12 +110,15 @@ The `DatabaseImporter` project is a utility to populate an Azure SQL Database wi
      "DatabaseConnection": "Server=your-server.database.windows.net;Database=your-database;User Id=your-username;Password=your-password;Encrypt=True;TrustServerCertificate=False;",
      "Nl2SqlConfig": {
        "database": {
-         "description": "Stats for NBA players from the 2023-24 season",
+      "description": "Statistics for Formula One circuit winners, constructor champions, and driver records from 2014-2023",
          "schemas": [
            {
              "name": "dbo",
              "tables": [
-               "NBAStats"
+               "F1Records",
+               "F1CircuitWinners",
+               "F1ConstructorChampions",
+               "F1ResultsSample"
              ]
            }
          ]
@@ -119,13 +127,19 @@ The `DatabaseImporter` project is a utility to populate an Azure SQL Database wi
    }
    ```
 
-3. Install required packages and run the API:
+3. Install required packages and trust the development certificate:
    ```bash
    cd realtime-api-dotnet
    dotnet restore
-   dotnet run
+   # Trust the HTTPS development certificate (required for localhost HTTPS)
+   dotnet dev-certs https --trust
    ```
-   The API will be available at `http://localhost:5126` by default
+
+4. Run the API:
+   ```bash
+   dotnet run --launch-profile https
+   ```
+   The API will be available at `https://localhost:7254` by default
 
 > **Important:** Ensure your Azure OpenAI resource has both a GPT-4o model deployed for chat completion and a GPT-4o Realtime model deployed for the streaming audio functionality.
 
@@ -153,23 +167,23 @@ For optimal NL2SQL performance, add column descriptions to your database tables.
 -- Example: Adding descriptions to improve NL2SQL accuracy
 EXEC sp_addextendedproperty 
   @name = N'MS_Description', 
-  @value = N'Player name in the format: FirstName LastName', 
+  @value = N'Driver name in the format: FirstName LastName',
   @level0type = N'SCHEMA', @level0name = 'dbo',
-  @level1type = N'TABLE',  @level1name = 'NBAStats',
-  @level2type = N'COLUMN', @level2name = 'PlayerName';
+  @level1type = N'TABLE',  @level1name = 'F1Records',
+  @level2type = N'COLUMN', @level2name = 'DriverName';
 
 EXEC sp_addextendedproperty 
   @name = N'MS_Description', 
-  @value = N'Points scored per game during the 2023-24 season', 
+  @value = N'Points scored during that season',
   @level0type = N'SCHEMA', @level0name = 'dbo',
-  @level1type = N'TABLE',  @level1name = 'NBAStats',
-  @level2type = N'COLUMN', @level2name = 'PointsPerGame';
+  @level1type = N'TABLE',  @level1name = 'F1Records',
+  @level2type = N'COLUMN', @level2name = 'Points';
 ```
 
 ## Usage
 
 1. **Start the Application**:
-   - Ensure the .NET API is running (`dotnet run` in `realtime-api-dotnet` directory)
+   - Ensure the .NET API is running (`dotnet run --launch-profile https` in `realtime-api-dotnet` directory)
    - Launch the React frontend (`npm start` in `azure-openai-demo` directory)
    - Open your browser to `http://localhost:3000`
 
