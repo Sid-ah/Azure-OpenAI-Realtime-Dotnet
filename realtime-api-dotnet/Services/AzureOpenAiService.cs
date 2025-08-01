@@ -1,10 +1,12 @@
 ﻿using Azure.AI.OpenAI;
 using Azure;
 using OpenAI.Chat;
+using OpenAI.Embeddings;
 using SqlDbSchemaExtractor;
 using SqlDbSchemaExtractor.Schema;
 using realtime_api_dotnet.Controllers;
 using realtime_api_dotnet.Prompts;
+using Microsoft.Data.SqlClient;
 
 namespace realtime_api_dotnet.Services;
 
@@ -12,8 +14,10 @@ public class AzureOpenAiService
 {
     private readonly ChatClient _chatClient;
     private readonly ILogger<AzureOpenAIController> _logger;
-    private Nl2SqlConfigRoot _nl2SqlConfig;
-    private string _databaseConnectionString;
+    private Nl2SqlConfigRoot? _nl2SqlConfig;
+    private string? _databaseConnectionString;
+    private readonly EmbeddingClient? _embeddingClient;
+    private readonly string? _embeddingDeploymentName;
 
     public AzureOpenAiService(IConfiguration configuration, ILogger<AzureOpenAIController> logger)
     {
@@ -36,12 +40,19 @@ public class AzureOpenAiService
         );
 
         var chatDeploymentName = configuration["AzureOpenAI:ChatDeploymentName"];
-        _chatClient = azureOpenAIClient.GetChatClient(chatDeploymentName);            
-        
+        _chatClient = azureOpenAIClient.GetChatClient(chatDeploymentName);
+
         // database connection details
         _databaseConnectionString = configuration["DatabaseConnection"];
 
         _nl2SqlConfig = configuration.GetSection("Nl2SqlConfig").Get<Nl2SqlConfigRoot>();
+        // Initialize Azure OpenAI Embeddings client (if configured)
+        var embeddingModel = configuration["AzureOpenAI:EmbeddingDeploymentName"];
+        if (!string.IsNullOrEmpty(embeddingModel))
+        {
+            _embeddingClient = azureOpenAIClient.GetEmbeddingClient(embeddingModel);
+            _embeddingDeploymentName = embeddingModel;
+        }
     }
 
     /// <summary>
@@ -106,12 +117,40 @@ public class AzureOpenAiService
     /// </summary>
     /// <param name="rewrittenQuery">The enhanced, rewritten user query</param>
     /// <returns>A SQL statement that can be executed against the database</returns>
-    public async Task<string> GenerateSqlQuery(string rewrittenQuery, string previousGeneratedSqlQuery = null, string sqlErrorMessage = null)
+    public async Task<string> GenerateSqlQuery(string rewrittenQuery, string? previousGeneratedSqlQuery = null, string? sqlErrorMessage = null)
     {
-        var sqlHarness = new SqlSchemaProviderHarness(_databaseConnectionString, _nl2SqlConfig.Database.Description);
-        var jsonSchema = await sqlHarness.ReverseEngineerSchemaJSONAsync(_nl2SqlConfig).ConfigureAwait(false);
+        // var sqlHarness = new SqlSchemaProviderHarness(_databaseConnectionString, _nl2SqlConfig.Database.Description);
+        // var jsonSchema = await sqlHarness.ReverseEngineerSchemaJSONAsync(_nl2SqlConfig).ConfigureAwait(false);
 
+        // var sqlPrompt = CorePrompts.GetSqlGenerationPrompt(jsonSchema, previousGeneratedSqlQuery, sqlErrorMessage);
+
+        var sqlHarness = new SqlSchemaProviderHarness(_databaseConnectionString, _nl2SqlConfig.Database.Description);
+        // 1. Determine relevant tables via embedding gating
+        string[] selectedTables = await GetRelevantTablesAsync(rewrittenQuery);
+        // 2. Create a filtered schema config with only the selected tables
+        var filteredConfig = new Nl2SqlConfigRoot
+        {
+            Database = new Nl2SqlConfig
+            {
+                Description = _nl2SqlConfig.Database.Description,
+                Schemas = new List<DbSchema>()
+            }
+        };
+        foreach (var schema in _nl2SqlConfig.Database.Schemas)
+        {
+            // Include the schema with filtered tables
+            var filteredTables = schema.Tables.Where(t => selectedTables.Contains(t)).ToList();
+            if (filteredTables.Any())
+            {
+                filteredConfig.Database.Schemas.Add(new DbSchema { Name = schema.Name, Tables = filteredTables });
+            }
+        }
+        // 3. Reverse-engineer JSON schema for only the relevant tables
+        var jsonSchema = await sqlHarness.ReverseEngineerSchemaJSONAsync(filteredConfig).ConfigureAwait(false);
+
+        // 4. Generate the SQL prompt with the reduced schema context
         var sqlPrompt = CorePrompts.GetSqlGenerationPrompt(jsonSchema, previousGeneratedSqlQuery, sqlErrorMessage);
+
 
         ChatCompletion completion = await _chatClient.CompleteChatAsync(
             [
@@ -122,5 +161,82 @@ public class AzureOpenAiService
         var generatedSqlStatement = completion.Content[0].Text;
 
         return generatedSqlStatement;
+    }
+
+    /// <summary>
+    /// Uses embeddings to find which tables are most relevant to the query.
+    /// </summary>
+    private async Task<string[]> GetRelevantTablesAsync(string userQuery)
+    {
+        if (_embeddingClient == null || string.IsNullOrEmpty(_embeddingDeploymentName))
+            return _nl2SqlConfig.Database.Schemas.SelectMany(s => s.Tables).ToArray(); 
+            // If no embedding model configured, fall back to all tables
+
+        // Compute embedding for the user query
+        var queryEmbeddingResponse = await _embeddingClient.GenerateEmbeddingAsync(userQuery);
+        var queryEmbedding = queryEmbeddingResponse.Value.ToFloats();
+
+        // Prepare list of table representations (e.g., "Schema.Table: Column1, Column2, ...")
+        var tableList = new List<(string TableName, string SchemaName, float[] Embedding)>();
+        using var connection = new SqlConnection(_databaseConnectionString);
+        await connection.OpenAsync();
+        foreach (var schema in _nl2SqlConfig.Database.Schemas)
+        {
+            foreach (var tableName in schema.Tables)
+            {
+                // Create a text description of the table (name plus column names)
+                string tableDescText = $"{schema.Name}.{tableName}";
+                // Optionally include column names to capture semantic context
+                using var cmd = new SqlCommand(
+                    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @schema AND TABLE_NAME = @table",
+                    connection);
+                cmd.Parameters.AddWithValue("@schema", schema.Name);
+                cmd.Parameters.AddWithValue("@table", tableName);
+                using var reader = await cmd.ExecuteReaderAsync();
+                var columnNames = new List<string>();
+                while (await reader.ReadAsync())
+                {
+                    columnNames.Add(reader.GetString(0));
+                }
+                reader.Close();
+                if (columnNames.Count > 0)
+                {
+                    tableDescText += $": {string.Join(", ", columnNames)}";
+                }
+
+                // Compute embedding for the table description text
+                var tableEmbeddingResponse = await _embeddingClient.GenerateEmbeddingAsync(tableDescText);
+                var tableEmbedding = tableEmbeddingResponse.Value.ToFloats();
+                tableList.Add((tableName, schema.Name, tableEmbedding.ToArray()));
+            }
+        }
+        await connection.CloseAsync();
+
+        // Calculate cosine similarity between query and each table
+        float[] queryVector = queryEmbedding.ToArray();
+        var tableSimilarities = tableList.Select(t =>
+        {
+            float[] tableVector = t.Embedding;
+            // Compute cosine similarity
+            float dot = 0, normQ = 0, normT = 0;
+            for (int i = 0; i < queryVector.Length; i++)
+            {
+                dot += queryVector[i] * tableVector[i];
+                normQ += queryVector[i] * queryVector[i];
+                normT += tableVector[i] * tableVector[i];
+            }
+            float cosineSim = dot / ((float)Math.Sqrt(normQ) * (float)Math.Sqrt(normT));
+            return (Table: $"{t.SchemaName}.{t.TableName}", Similarity: cosineSim);
+        }).OrderByDescending(x => x.Similarity).ToList();
+
+        // Select the top tables with highest similarity (e.g., top 1–2)
+        double threshold = 0.20; // optional: include any table with similarity above 0.2
+        var selectedTables = tableSimilarities
+                                .Where(x => x.Similarity >= threshold || x == tableSimilarities.First())
+                                .Take(2)  // limit to top 2 to keep prompt concise
+                                .Select(x => x.Table.Split('.')[1])  // return table names only
+                                .ToArray();
+        _logger.LogInformation($"Embedding-gated tables for query '{userQuery}': {string.Join(", ", selectedTables)}");
+        return selectedTables;
     }
 }
