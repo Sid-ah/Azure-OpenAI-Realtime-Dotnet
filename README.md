@@ -33,6 +33,7 @@ The project consists of two main parts:
   - Intent classification to determine query type (statistical vs. conversational)
   - Context-aware query rewriting to include chat history information
   - Natural Language to SQL (NL2SQL) for database querying
+  - **Embeddings-based table filtering** for optimized SQL generation (see [EMBEDDINGS_GUIDE.md](EMBEDDINGS_GUIDE.md))
 
 - **User Experience**:
   - Clean, responsive React-based interface
@@ -104,6 +105,7 @@ The `DatabaseImporter` project is a utility to populate an Azure SQL Database wi
        "ResourceName": "your-azure-openai-resource-name",
        "RealtimeDeploymentName": "gpt-4o-realtime-preview",
        "ChatDeploymentName": "gpt-4o",
+       "EmbeddingDeploymentName": "text-embedding-3-small",
        "ApiKey": "your-azure-openai-api-key",
        "ApiVersion": "2025-04-01-preview"
      },
@@ -331,6 +333,7 @@ To customize this application for non-sports data:
    - Verify database schema is correctly configured in `Nl2SqlConfig`
    - Add column descriptions using `sp_addextendedproperty` for better results
    - Check that the `SqlDbSchemaExtractor` package is properly installed
+   - Review embeddings configuration if using table filtering (see [EMBEDDINGS_GUIDE.md](EMBEDDINGS_GUIDE.md))
 
 ### Performance Optimization
 
@@ -356,6 +359,10 @@ This project is for demonstration and learning purposes. Please review Azure Ope
   - [Azure OpenAI Documentation](https://learn.microsoft.com/en-us/azure/ai-services/openai/)
   - [Realtime API Reference](https://learn.microsoft.com/en-us/azure/ai-services/openai/realtime-audio-quickstart)
   - [GPT-4o Model Information](https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models#gpt-4o-and-gpt-4-turbo)
+  - [Embeddings Documentation](https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/understand-embeddings)
+
+- **Project-Specific Guides**:
+  - [Embeddings Implementation Guide](EMBEDDINGS_GUIDE.md) - Detailed guide for the embeddings-based table filtering system
 
 - **Web Technologies**:
   - [WebRTC Documentation](https://webrtc.org/)
@@ -368,6 +375,7 @@ This project is for demonstration and learning purposes. Please review Azure Ope
 
 ---
 
-**Last Updated**: June 2025  
+**Last Updated**: August 2025  
 **Azure OpenAI API Version**: 2025-04-01-preview  
-**Supported Models**: GPT-4o, GPT-4o Realtime Preview
+**Supported Models**: GPT-4o, GPT-4o Realtime Preview, text-embedding-3-small/large  
+**Azure OpenAI SDK**: 2.2.0-beta.4
