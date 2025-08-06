@@ -5,6 +5,8 @@ using SqlDbSchemaExtractor;
 using SqlDbSchemaExtractor.Schema;
 using realtime_api_dotnet.Controllers;
 using realtime_api_dotnet.Prompts;
+using Microsoft.SemanticKernel;
+using realtime_api_dotnet.Plugins;
 
 namespace realtime_api_dotnet.Services;
 
@@ -12,12 +14,14 @@ public class AzureOpenAiService
 {
     private readonly ChatClient _chatClient;
     private readonly ILogger<AzureOpenAIController> _logger;
-    private Nl2SqlConfigRoot _nl2SqlConfig;
-    private string _databaseConnectionString;
+    private readonly Kernel _kernel;
+    private readonly Nl2SqlConfigRoot _nl2SqlConfig;
+    private readonly string _databaseConnectionString;
 
-    public AzureOpenAiService(IConfiguration configuration, ILogger<AzureOpenAIController> logger)
+    public AzureOpenAiService(IConfiguration configuration, ILogger<AzureOpenAIController> logger, Kernel kernel)
     {
         _logger = logger;
+        _kernel = kernel;
         var resourceName = configuration["AzureOpenAI:ResourceName"];
 
         // Initialize the Azure OpenAI client
@@ -39,9 +43,9 @@ public class AzureOpenAiService
         _chatClient = azureOpenAIClient.GetChatClient(chatDeploymentName);            
         
         // database connection details
-        _databaseConnectionString = configuration["DatabaseConnection"];
+        _databaseConnectionString = configuration["DatabaseConnection"] ?? throw new InvalidOperationException("DatabaseConnection configuration is missing");
 
-        _nl2SqlConfig = configuration.GetSection("Nl2SqlConfig").Get<Nl2SqlConfigRoot>();
+        _nl2SqlConfig = configuration.GetSection("Nl2SqlConfig").Get<Nl2SqlConfigRoot>() ?? throw new InvalidOperationException("Nl2SqlConfig configuration is missing");
     }
 
     /// <summary>
@@ -52,21 +56,27 @@ public class AzureOpenAiService
     /// <returns>true if this is a statistical query, false otherwise.</returns>
     public async Task<bool> ClassifyIntent(string conversationHistory, string userQuery)
     {
-        // Use conversation history to ensure follow-up questions are classified correctly
-        var intentDetectionPrompt = CorePrompts.GetIntentClassificationPrompt(conversationHistory);
+        try
+        {
+            var intentPlugin = _kernel.Plugins["IntentClassificationPlugin"];
+            var result = await _kernel.InvokeAsync(intentPlugin["ClassifyIntentAsync"], new()
+            {
+                ["conversationHistory"] = conversationHistory,
+                ["userQuery"] = userQuery
+            });
 
-        ChatCompletion completion = await _chatClient.CompleteChatAsync(
-            [
-                new SystemChatMessage(intentDetectionPrompt),
-                new UserChatMessage($"Classify this message: '{userQuery}'. Is this asking about Formula One racing statistics, drivers, teams, constructor championships, or race results (respond with STATISTICAL) or is it just a greeting or general conversation not related to data lookup (respond with CONVERSATIONAL)?")
-            ]);
+            var responseText = result.ToString();
 
-        var responseText = completion.Content[0].Text;
+            // Parse the classification response
+            bool isStatisticalQuery = responseText.Contains("STATISTICAL", StringComparison.OrdinalIgnoreCase);
 
-        // Parse the classification response
-        bool isStatisticalQuery = responseText.Contains("STATISTICAL", StringComparison.OrdinalIgnoreCase);
-
-        return isStatisticalQuery;
+            return isStatisticalQuery;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in intent classification using Semantic Kernel");
+            throw;
+        }
     }
 
     /// <summary>
@@ -81,24 +91,27 @@ public class AzureOpenAiService
     /// <returns>The rewritten query to help the NL2SQL return valid results</returns>
     public async Task<string> RewriteQuery(string conversationHistory, string userQuery)
     {
-        // For follow up questions, we want to ensure we have a query that represents any context. For example,
-        // if the user asks "Who won the most races this season?" and the LLM answers "Max Verstappen".
-        // The follow up may be "How many points did he score?". Rather than generate a query for "How many points did he score?",
-        // we'll use the LLM to rewrite this query using history so it will be something like "How many points did Max Verstappen score in the season?"
-        var queryRewritePrompt = CorePrompts.GetQueryRewritePrompt(conversationHistory);
+        try
+        {
+            var queryRewritePlugin = _kernel.Plugins["QueryRewritePlugin"];
+            var result = await _kernel.InvokeAsync(queryRewritePlugin["RewriteQueryAsync"], new()
+            {
+                ["conversationHistory"] = conversationHistory,
+                ["userQuery"] = userQuery
+            });
 
-        ChatCompletion completion = await _chatClient.CompleteChatAsync(
-            [
-                new SystemChatMessage(queryRewritePrompt),
-                new UserChatMessage($"User Prompt: '{userQuery}'")
-            ]);
+            string rewrittenQuery = result.ToString();
 
-        string rewrittenQuery = completion.Content[0].Text;
+            _logger.LogInformation($"Received query: {userQuery}");
+            _logger.LogInformation($"Rewritten query: {rewrittenQuery}");
 
-        _logger.LogInformation($"Received query: {userQuery}");
-        _logger.LogInformation($"Rewritten query: {rewrittenQuery}");
-
-        return rewrittenQuery;
+            return rewrittenQuery;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in query rewriting using Semantic Kernel");
+            throw;
+        }
     }
 
     /// <summary>
@@ -106,21 +119,30 @@ public class AzureOpenAiService
     /// </summary>
     /// <param name="rewrittenQuery">The enhanced, rewritten user query</param>
     /// <returns>A SQL statement that can be executed against the database</returns>
-    public async Task<string> GenerateSqlQuery(string rewrittenQuery, string previousGeneratedSqlQuery = null, string sqlErrorMessage = null)
+    public async Task<string> GenerateSqlQuery(string rewrittenQuery, string? previousGeneratedSqlQuery = null, string? sqlErrorMessage = null)
     {
-        var sqlHarness = new SqlSchemaProviderHarness(_databaseConnectionString, _nl2SqlConfig.Database.Description);
-        var jsonSchema = await sqlHarness.ReverseEngineerSchemaJSONAsync(_nl2SqlConfig).ConfigureAwait(false);
+        try
+        {
+            var sqlHarness = new SqlSchemaProviderHarness(_databaseConnectionString, _nl2SqlConfig.Database.Description);
+            var jsonSchema = await sqlHarness.ReverseEngineerSchemaJSONAsync(_nl2SqlConfig).ConfigureAwait(false);
 
-        var sqlPrompt = CorePrompts.GetSqlGenerationPrompt(jsonSchema, previousGeneratedSqlQuery, sqlErrorMessage);
+            var sqlGenerationPlugin = _kernel.Plugins["SqlGenerationPlugin"];
+            var result = await _kernel.InvokeAsync(sqlGenerationPlugin["GenerateSqlQueryAsync"], new()
+            {
+                ["naturalLanguageQuery"] = rewrittenQuery,
+                ["jsonSchema"] = jsonSchema,
+                ["previousSqlQuery"] = previousGeneratedSqlQuery,
+                ["sqlErrorMessage"] = sqlErrorMessage
+            });
 
-        ChatCompletion completion = await _chatClient.CompleteChatAsync(
-            [
-                new SystemChatMessage(sqlPrompt),
-                new UserChatMessage($"User Prompt: '{rewrittenQuery}'")
-            ]);
+            var generatedSqlStatement = result.ToString();
 
-        var generatedSqlStatement = completion.Content[0].Text;
-
-        return generatedSqlStatement;
+            return generatedSqlStatement;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in SQL generation using Semantic Kernel");
+            throw;
+        }
     }
 }

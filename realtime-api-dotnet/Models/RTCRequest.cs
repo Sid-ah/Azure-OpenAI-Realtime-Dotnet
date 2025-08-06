@@ -1,7 +1,7 @@
 public class RTCRequest
 {
-    public string Sdp { get; set; }
-    public string EphemeralKey { get; set; }
-    public string DeploymentName { get; set; }
-    public string Region { get; set; }
+    public required string Sdp { get; set; }
+    public required string EphemeralKey { get; set; }
+    public required string DeploymentName { get; set; }
+    public required string Region { get; set; }
 }

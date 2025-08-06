@@ -186,13 +186,13 @@ public class AzureOpenAIController : ControllerBase
 
     public class ChatMessageDto
     {
-        public string Sender { get; set; }
-        public string Text { get; set; }
+        public required string Sender { get; set; }
+        public required string Text { get; set; }
     }
 
     public class QueryRequest
     {
-        public string Query { get; set; }
+        public required string Query { get; set; }
 
         public List<ChatMessageDto> Messages { get; set; } = new List<ChatMessageDto>();
     }
